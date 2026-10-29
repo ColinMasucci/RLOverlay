@@ -1,0 +1,24 @@
+{
+  "name": "rloverlay",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "start": "npm run build && electron .",
+    "build": "vite build --config vite.config.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "*",
+    "vite": "^6.0.7"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "ws": "*"
+  }
+}
