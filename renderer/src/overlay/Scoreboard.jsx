@@ -29,7 +29,7 @@ function RankBadge({ rank }) {
     );
 }
 
-function PlayerRow({ player, team }) {
+function PlayerRow({ player, team, statVisibility }) {
     return (
         <tr className={`${team === 0 ? "blue-player" : "orange-player"}${player.active === false ? " inactive-player" : ""}`}>
             <td>
@@ -102,6 +102,7 @@ function TeamSection({ team, players, statVisibility }) {
                                 key={`${player.id || player.name}-${player.team}-${index}`}
                                 player={player}
                                 team={team}
+                                statVisibility={statVisibility}
                             />
                         ))
                         : (

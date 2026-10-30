@@ -15,8 +15,9 @@ function useGamepadBridge() {
                     gamepad.buttons.forEach((button, index) => {
                         const key = `${controllerId}:${index}`;
                         const pressed = button.pressed || button.value >= 0.5;
-                        currentButtons.set(key, { controllerId, index, pressed });
-                        if (previousButtons.get(key) !== pressed) {
+                        const state = { controllerId, index, pressed };
+                        currentButtons.set(key, state);
+                        if (previousButtons.get(key)?.pressed !== pressed) {
                             api.sendGamepadButtonChange({
                                 controllerId,
                                 button: index,
@@ -26,7 +27,7 @@ function useGamepadBridge() {
                     });
                 }
                 for (const [key, previous] of previousButtons) {
-                    if (!currentButtons.has(key) && previous) {
+                    if (!currentButtons.has(key) && previous.pressed) {
                         api.sendGamepadButtonChange({
                             controllerId: previous.controllerId,
                             button: previous.index,
@@ -36,7 +37,7 @@ function useGamepadBridge() {
                 }
                 previousButtons.clear();
                 for (const [key, state] of currentButtons) {
-                    previousButtons.set(key, state.pressed ? state : false);
+                    previousButtons.set(key, state);
                 }
             }
             frameId = requestAnimationFrame(pollGamepads);

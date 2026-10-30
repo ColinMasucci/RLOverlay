@@ -18,36 +18,68 @@ function HistoryCard({ label, value }) {
 }
 
 function GameSequence({ games }) {
-    let previousDate = null;
+    const groups = [];
+    for (const game of games.slice(0, 20)) {
+        const date = new Date(game.finishedAt);
+        const localDate = Number.isFinite(date.getTime())
+            ? `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+            : String(game.finishedAt).slice(0, 10);
+        const label = Number.isFinite(date.getTime())
+            ? date.toDateString() === new Date().toDateString()
+                ? "Today"
+                : date.toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric"
+                })
+            : localDate || "Unknown date";
+        let group = groups[groups.length - 1];
+        if (!group || group.date !== localDate) {
+            group = { date: localDate, label, games: [] };
+            groups.push(group);
+        }
+        group.games.push(game);
+    }
+
+    const rows = [
+        ...groups.slice(0, 2),
+        ...(groups.length > 2
+            ? [{
+                label: groups.length > 3
+                    ? `Earlier · ${groups[groups.length - 1].label} – ${groups[2].label}`
+                    : groups[2].label,
+                games: groups.slice(2).flatMap((group) => group.games)
+            }]
+            : [])
+    ];
+
     return (
         <div className="game-sequence">
-            {games.slice(0, 20).map((game) => {
-                const date = new Date(game.finishedAt);
-                const localDate = Number.isFinite(date.getTime())
-                    ? `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
-                    : String(game.finishedAt).slice(0, 10);
-                const showDivider = localDate !== previousDate;
-                previousDate = localDate;
-                const dividerLabel = Number.isFinite(date.getTime())
-                    ? date.toDateString() === new Date().toDateString()
-                        ? "Today"
-                        : date.toLocaleDateString(undefined, {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric"
-                        })
-                    : localDate || "Unknown date";
-                const title = `${game.outcome[0].toUpperCase()}${game.outcome.slice(1)} · ` +
-                    (Number.isFinite(date.getTime()) ? date.toLocaleString() : game.finishedAt);
-                return (
-                    <React.Fragment key={game.id}>
-                        {showDivider && <span className="game-day-divider">{dividerLabel}</span>}
-                        <span className={`game-result ${game.outcome}`} title={title} aria-label={title}>
-                            {game.outcome === "win" ? "✓" : game.outcome === "loss" ? "×" : "–"}
-                        </span>
-                    </React.Fragment>
-                );
-            })}
+            {rows.map((group) => (
+                <div className="game-sequence-row" key={group.date ?? "earlier"}>
+                    <span className="game-day-divider">{group.label}</span>
+                    <div className="game-sequence-results">
+                        {group.games.map((game) => {
+                            const date = new Date(game.finishedAt);
+                            const title =
+                                `${game.outcome[0].toUpperCase()}${game.outcome.slice(1)} · ` +
+                                (Number.isFinite(date.getTime())
+                                    ? date.toLocaleString()
+                                    : game.finishedAt);
+                            return (
+                                <span
+                                    key={game.id}
+                                    className={`game-result ${game.outcome}`}
+                                    title={title}
+                                    aria-label={title}
+                                >
+                                    {game.outcome === "win" ? "✓" : game.outcome === "loss" ? "×" : "–"}
+                                </span>
+                            );
+                        })}
+                    </div>
+                </div>
+            ))}
         </div>
     );
 }

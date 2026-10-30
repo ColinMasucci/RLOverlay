@@ -1,24 +1,72 @@
 {
   "name": "rloverlay",
   "version": "1.0.0",
-  "description": "",
+  "description": "Rocket League scoreboard and match-history overlay",
   "main": "main.js",
   "scripts": {
     "start": "npm run build && electron .",
-    "build": "vite build --config vite.config.js"
+    "build": "vite build --config vite.config.js",
+    "dist:win": "npm run build && electron-builder --win nsis --publish never"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ColinMasucci/RLOverlay.git"
+  },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
-    "electron": "*",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
     "vite": "^6.0.7"
   },
   "dependencies": {
+    "electron-updater": "^6.8.11",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "ws": "*"
+    "ws": "^8.22.0"
+  },
+  "build": {
+    "appId": "com.colinmasucci.rloverlay",
+    "productName": "RLOverlay",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "match-events.js",
+      "match-history.js",
+      "dist/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ColinMasucci",
+        "repo": "RLOverlay",
+        "releaseType": "release"
+      }
+    ]
   }
 }

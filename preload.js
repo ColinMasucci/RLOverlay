@@ -79,6 +79,25 @@ contextBridge.exposeInMainWorld("rocketLeague", {
     saveSettings(settings) {
         return ipcRenderer.invoke("save-settings", settings);
     },
+    checkForUpdates() {
+        return ipcRenderer.invoke("check-for-updates");
+    },
+    installDownloadedUpdate() {
+        return ipcRenderer.invoke("install-downloaded-update");
+    },
+    closeApp() {
+        return ipcRenderer.invoke("close-app");
+    },
+    onAppUpdateStatus(callback) {
+        const listener = (_event, status) => {
+            callback(status);
+        };
+
+        ipcRenderer.on("app-update-status", listener);
+        return () => {
+            ipcRenderer.removeListener("app-update-status", listener);
+        };
+    },
     startGamepadBinding(target) {
         ipcRenderer.send("start-gamepad-binding", target);
     },

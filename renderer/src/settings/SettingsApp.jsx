@@ -53,6 +53,10 @@ export default function SettingsApp() {
     const [message, setMessage] = useState("");
     const [isError, setIsError] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [appInfo, setAppInfo] = useState({ isPackaged: false, version: "" });
+    const [updateStatus, setUpdateStatus] = useState({ state: "idle" });
+    const [updateBusy, setUpdateBusy] = useState(false);
+    const [closing, setClosing] = useState(false);
 
     useEffect(() => {
         const api = window.rocketLeague;
@@ -66,6 +70,10 @@ export default function SettingsApp() {
                 setMessage(result.message);
                 setIsError(result.error === true);
             }),
+            api.onAppUpdateStatus((status) => {
+                setUpdateStatus(status);
+                setUpdateBusy(status.state === "checking" || status.state === "downloading");
+            }),
             api.onSettingsFilePath(setFilePath),
             api.onMatchHistoryFilePath(setHistoryFilePath)
         ];
@@ -74,6 +82,7 @@ export default function SettingsApp() {
             if (!mounted) return;
             setSettings(result.settings);
             setPlayerOptions(result.playerOptions);
+            setAppInfo(result.appInfo);
             setFilePath(`Saved to: ${result.filePath}`);
             setHistoryFilePath(`Match history file: ${result.historyFilePath}`);
         }).catch((error) => {
@@ -139,6 +148,62 @@ export default function SettingsApp() {
         window.rocketLeague.startGamepadBinding(target);
     }
 
+    async function checkForUpdates() {
+        setUpdateBusy(true);
+        setUpdateStatus({ state: "checking" });
+        try {
+            const result = await window.rocketLeague.checkForUpdates();
+            if (!result.ok) {
+                setUpdateBusy(false);
+                setUpdateStatus({ state: "error", message: result.error });
+            }
+        } catch (error) {
+            setUpdateBusy(false);
+            setUpdateStatus({ state: "error", message: error.message });
+        }
+    }
+
+    async function installUpdate() {
+        try {
+            const result = await window.rocketLeague.installDownloadedUpdate();
+            if (!result.ok) {
+                setUpdateStatus({ state: "error", message: result.error });
+            }
+        } catch (error) {
+            setUpdateStatus({ state: "error", message: error.message });
+        }
+    }
+
+    async function closeApp() {
+        if (!window.confirm("Close RLOverlay?")) return;
+        setClosing(true);
+        try {
+            const result = await window.rocketLeague.closeApp();
+            if (!result.ok) {
+                setClosing(false);
+                setMessage(result.error);
+                setIsError(true);
+            }
+        } catch (error) {
+            setClosing(false);
+            setMessage(`Could not close the app: ${error.message}`);
+            setIsError(true);
+        }
+    }
+
+    const updateMessage = {
+        idle: appInfo.isPackaged
+            ? "Check GitHub Releases for a newer version."
+            : "Updates are available in the installed app.",
+        checking: "Checking GitHub Releases...",
+        downloading: `Downloading update${Number.isFinite(updateStatus.percent)
+            ? `: ${updateStatus.percent}%`
+            : "..."}`,
+        downloaded: `Version ${updateStatus.version} is ready to install.`,
+        "up-to-date": `You're up to date (version ${updateStatus.version}).`,
+        error: `Update failed: ${updateStatus.message}`
+    }[updateStatus.state] ?? "";
+
     return (
         <main>
             <h1>Overlay Settings</h1>
@@ -161,9 +226,11 @@ export default function SettingsApp() {
 
             <section className="settings-section">
                 <h2>Controller buttons</h2>
+                <p className="help">Hold the overlay button while pressing the history button to switch tabs.</p>
                 {[
                     ["overlayButton", "Hold to show overlay"],
-                    ["toggleConnectionButton", "Toggle API connection"]
+                    ["toggleConnectionButton", "Toggle API connection"],
+                    ["toggleHistoryButton", "Switch scoreboard / history"]
                 ].map(([key, label]) => (
                     <div className="controller-row" key={key}>
                         <label>{label}</label>
@@ -323,11 +390,39 @@ export default function SettingsApp() {
                 </Field>
             </section>
 
+            <section className="settings-section">
+                <h2>App updates</h2>
+                <p className="help">Installed version: {appInfo.version || "Unknown"}</p>
+                <p className={`help${updateStatus.state === "error" ? " settings-message error" : ""}`}
+                    role="status" aria-live="polite">
+                    {updateMessage}
+                </p>
+                <div className="settings-actions">
+                    <button
+                        type="button"
+                        disabled={!appInfo.isPackaged || updateBusy || updateStatus.state === "downloaded"}
+                        onClick={checkForUpdates}
+                    >
+                        {updateBusy ? "Please wait..." : "Check for updates"}
+                    </button>
+                    {updateStatus.state === "downloaded" && (
+                        <button type="button" onClick={installUpdate}>
+                            Restart and install
+                        </button>
+                    )}
+                </div>
+            </section>
+
             <div className="settings-footer">
                 <span className="file-path">{filePath}</span>
-                <button type="button" disabled={saving} onClick={() => save()}>
-                    Save settings
-                </button>
+                <div className="settings-actions">
+                    <button type="button" disabled={saving} onClick={() => save()}>
+                        Save settings
+                    </button>
+                    <button type="button" className="close-app-button" disabled={closing} onClick={closeApp}>
+                        {closing ? "Closing..." : "Close app"}
+                    </button>
+                </div>
             </div>
             <div className={`settings-message${isError ? " error" : ""}`} role="status" aria-live="polite">
                 {message}

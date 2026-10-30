@@ -287,6 +287,17 @@ FakesAssemblies/
 # Node.js Tools for Visual Studio
 .ntvs_analysis.dat
 node_modules/
+release/
+
+# Local credentials, user data, and diagnostic output
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.key
+settings.json
+match-history.json
 
 # Visual Studio 6 build log
 *.plg

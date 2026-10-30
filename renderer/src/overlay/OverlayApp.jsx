@@ -34,6 +34,18 @@ export default function OverlayApp() {
     const showHeatmap = settings?.showHeatmap !== false;
     const historyShortcut = settings?.keyboard?.toggleHistory ?? "F11";
     const settingsShortcut = settings?.keyboard?.toggleSettings ?? "F10";
+    const trackedPlayerId = settings?.trackedPlayerId;
+    const trackedPlayer = trackedPlayerId
+        ? players.find((player) => {
+            const playerId = typeof player.id === "string" && player.id.trim()
+                ? player.id.trim()
+                : `name:${String(player.name ?? "").trim().toLowerCase()}`;
+            return playerId === trackedPlayerId;
+        })
+        : null;
+    const userTeam = trackedPlayer?.team === 0 || trackedPlayer?.team === 1
+        ? trackedPlayer.team
+        : 0;
     const showingHistory = view === "history";
 
     return (
@@ -48,7 +60,9 @@ export default function OverlayApp() {
                 : (
                     <div className={`overlay-content${showHeatmap ? "" : " heatmap-hidden"}`}>
                         <Scoreboard players={players} statVisibility={statVisibility} />
-                        {showHeatmap && <Heatmap samples={samples} mode={heatmapMode} />}
+                        {showHeatmap && (
+                            <Heatmap samples={samples} mode={heatmapMode} userTeam={userTeam} />
+                        )}
                     </div>
                 )}
         </main>

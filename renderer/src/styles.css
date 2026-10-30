@@ -238,12 +238,12 @@ button {
     text-align: center;
 }
 
-.blue-possession-total {
+.user-possession-total {
     justify-self: end;
     margin-right: 14px;
 }
 
-.orange-possession-total {
+.opponent-possession-total {
     justify-self: start;
     margin-left: 14px;
 }
@@ -293,30 +293,45 @@ button {
 
 .game-sequence {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+    flex-direction: column;
     gap: 5px;
 }
 
+.game-sequence-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
 .game-day-divider {
-    flex: 0 0 100%;
-    margin: 4px 0 1px;
+    flex: 0 0 105px;
     color: #aab8d0;
     font-size: 10px;
     font-weight: bold;
+    overflow: hidden;
+    text-overflow: ellipsis;
     text-transform: uppercase;
+    white-space: nowrap;
 }
 
-.game-day-divider:not(:first-child)::before {
-    display: block;
-    height: 1px;
-    margin-bottom: 4px;
-    background: rgba(255, 255, 255, 0.14);
-    content: "";
+.game-sequence-results {
+    display: flex;
+    flex: 1;
+    gap: 5px;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+}
+
+.game-sequence-results::-webkit-scrollbar {
+    display: none;
 }
 
 .game-result {
     display: inline-flex;
+    flex: 0 0 29px;
     width: 29px;
     height: 29px;
     align-items: center;
@@ -539,6 +554,21 @@ button {
 .settings-page button:disabled {
     cursor: wait;
     opacity: 0.6;
+}
+
+.settings-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.settings-page button.close-app-button {
+    background: #9e4545;
+}
+
+.settings-page button.close-app-button:hover {
+    background: #bd5353;
 }
 
 .help,

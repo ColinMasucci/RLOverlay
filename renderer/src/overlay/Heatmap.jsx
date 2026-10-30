@@ -9,7 +9,7 @@ function getPossession(samples) {
     return total ? [counts[0] / total * 100, counts[1] / total * 100] : null;
 }
 
-function drawHeatmap(canvas, samples, mode) {
+function drawHeatmap(canvas, samples, mode, userTeam) {
     const context = canvas.getContext("2d");
     const { width, height } = canvas;
     const field = { left: 52, right: width - 52, top: 54, bottom: height - 54 };
@@ -92,12 +92,15 @@ function drawHeatmap(canvas, samples, mode) {
         }
     }
 
+    const orientedSamples = userTeam === 1
+        ? samples.map((sample) => ({ ...sample, y: -sample.y }))
+        : samples;
     const zonePossessions = [];
     if (mode === "zones") {
         const zones = [
-            samples.filter((sample) => sample.y > 5120 / 3),
-            samples.filter((sample) => sample.y <= 5120 / 3 && sample.y >= -5120 / 3),
-            samples.filter((sample) => sample.y < -5120 / 3)
+            orientedSamples.filter((sample) => sample.y > 5120 / 3),
+            orientedSamples.filter((sample) => sample.y <= 5120 / 3 && sample.y >= -5120 / 3),
+            orientedSamples.filter((sample) => sample.y < -5120 / 3)
         ];
         for (let index = 0; index < zones.length; index += 1) {
             const possession = getPossession(zones[index]);
@@ -117,11 +120,13 @@ function drawHeatmap(canvas, samples, mode) {
             context.fillRect(field.left, zoneTop, fieldWidth, fieldHeight / 3);
         }
     } else {
-        context.fillStyle = "rgba(53, 167, 255, 0.12)";
+        const attackingTeam = 1 - userTeam;
+        const teamColors = ["53, 167, 255", "255, 155, 69"];
+        context.fillStyle = `rgba(${teamColors[attackingTeam]}, 0.12)`;
         context.fillRect(field.left, field.top, fieldWidth, fieldHeight / 2);
-        context.fillStyle = "rgba(255, 155, 69, 0.12)";
+        context.fillStyle = `rgba(${teamColors[userTeam]}, 0.12)`;
         context.fillRect(field.left, middleY, fieldWidth, fieldHeight / 2);
-        for (const sample of samples) {
+        for (const sample of orientedSamples) {
             const x = field.left + ((sample.x + 4096) / 8192) * fieldWidth;
             const y = field.top + ((5120 - sample.y) / 10240) * fieldHeight;
             const color = sample.team === 0 ? "53, 167, 255" : "255, 155, 69";
@@ -158,15 +163,29 @@ function drawHeatmap(canvas, samples, mode) {
         context.textBaseline = "middle";
         context.font = "bold 60px Arial";
         zonePossessions.forEach((possession, index) => {
-            const [blue, orange] = possession ?? [0, 0];
+            const percentages = possession ?? [0, 0];
             const centerY = field.top + (index + 0.5) * fieldHeight / 3;
-            context.fillStyle = "#8fcfff";
-            context.shadowColor = "#35a7ff";
+            const leftColor = userTeam === 0 ? "#8fcfff" : "#ffc18b";
+            const rightColor = userTeam === 0 ? "#ffc18b" : "#8fcfff";
+            const leftShadow = userTeam === 0 ? "#35a7ff" : "#ff9b45";
+            const rightShadow = userTeam === 0 ? "#ff9b45" : "#35a7ff";
+            context.fillStyle = leftColor;
+            context.shadowColor = leftShadow;
             context.shadowBlur = 18;
-            context.fillText(`${Math.round(blue)}%`, field.left + fieldWidth / 4, centerY, fieldWidth / 2 - 20);
-            context.fillStyle = "#ffc18b";
-            context.shadowColor = "#ff9b45";
-            context.fillText(`${Math.round(orange)}%`, field.left + fieldWidth * 3 / 4, centerY, fieldWidth / 2 - 20);
+            context.fillText(
+                `${Math.round(percentages[userTeam])}%`,
+                field.left + fieldWidth / 4,
+                centerY,
+                fieldWidth / 2 - 20
+            );
+            context.fillStyle = rightColor;
+            context.shadowColor = rightShadow;
+            context.fillText(
+                `${Math.round(percentages[1 - userTeam])}%`,
+                field.left + fieldWidth * 3 / 4,
+                centerY,
+                fieldWidth / 2 - 20
+            );
         });
         context.restore();
     }
@@ -203,8 +222,8 @@ function drawHeatmap(canvas, samples, mode) {
     context.restore();
     drawGoal(-1);
     drawGoal(1);
-    if (mode !== "zones" && samples.length) {
-        const latest = samples[samples.length - 1];
+    if (mode !== "zones" && orientedSamples.length) {
+        const latest = orientedSamples[orientedSamples.length - 1];
         const x = field.left + ((latest.x + 4096) / 8192) * fieldWidth;
         const y = field.top + ((5120 - latest.y) / 10240) * fieldHeight;
         context.beginPath();
@@ -217,27 +236,30 @@ function drawHeatmap(canvas, samples, mode) {
     }
 }
 
-export default function Heatmap({ samples, mode }) {
+export default function Heatmap({ samples, mode, userTeam = 0 }) {
     const canvasRef = useRef(null);
     const possession = getPossession(samples);
     useEffect(() => {
-        if (canvasRef.current) drawHeatmap(canvasRef.current, samples, mode);
-    }, [samples, mode]);
+        if (canvasRef.current) drawHeatmap(canvasRef.current, samples, mode, userTeam);
+    }, [samples, mode, userTeam]);
+
+    const opponentTeam = 1 - userTeam;
+    const teamClasses = ["blue", "orange"];
 
     return (
         <aside className="heatmap-panel" aria-label="Ball location heatmap">
             <h2>Ball Heatmap</h2>
             <div className="possession-header" aria-label="Overall possession by team">
-                <span className="possession-total blue-possession-total">
-                    {Math.round(possession?.[0] ?? 0)}%
+                <span className={`possession-total user-possession-total ${teamClasses[userTeam]}-possession-total`}>
+                    {Math.round(possession?.[userTeam] ?? 0)}%
                 </span>
                 <span className="possession-title">
-                    <span className="possession-dot blue-dot" />
+                    <span className={`possession-dot ${teamClasses[userTeam]}-dot`} />
                     <span>POSSESSION</span>
-                    <span className="possession-dot orange-dot" />
+                    <span className={`possession-dot ${teamClasses[opponentTeam]}-dot`} />
                 </span>
-                <span className="possession-total orange-possession-total">
-                    {Math.round(possession?.[1] ?? 0)}%
+                <span className={`possession-total opponent-possession-total ${teamClasses[opponentTeam]}-possession-total`}>
+                    {Math.round(possession?.[opponentTeam] ?? 0)}%
                 </span>
             </div>
             <canvas

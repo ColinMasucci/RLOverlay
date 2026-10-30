@@ -1,4 +1,5 @@
 const { app, BrowserWindow, globalShortcut, ipcMain, screen } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const fs = require("fs");
 const path = require("path");
 const WebSocket = require("ws");
@@ -11,6 +12,8 @@ let settingsWindow;
 let trackerWindow;
 let rocketLeagueSocket;
 let trackerLookupGeneration = 0;
+let updateDownloaded = false;
+let updateOperationActive = false;
 
 let players = [];
 let currentMatchGuid = null;
@@ -49,6 +52,8 @@ let connectionStatus = {
     connected: false,
     receiving: false
 };
+let connectionMessageTimeout = null;
+const CONNECTION_MESSAGE_TIMEOUT_MS = 5000;
 const defaultSettings = {
     keyboard: {
         toggleOverlay: "F8",
@@ -58,7 +63,8 @@ const defaultSettings = {
     },
     gamepad: {
         overlayButton: 8,
-        toggleConnectionButton: null
+        toggleConnectionButton: null,
+        toggleHistoryButton: 9
     },
     overlayScale: 1.15,
     positionX: 0,
@@ -251,14 +257,28 @@ function validateSettings(value) {
     const validButton = (button) => button === null ||
         (Number.isInteger(button) && button >= 0 && button <= 31);
 
+    let toggleHistoryButton = value.gamepad.toggleHistoryButton;
+    if (toggleHistoryButton === undefined) {
+        const defaultHistoryButtonIsAssigned =
+            value.gamepad.overlayButton === defaultSettings.gamepad.toggleHistoryButton ||
+            value.gamepad.toggleConnectionButton === defaultSettings.gamepad.toggleHistoryButton;
+        toggleHistoryButton = defaultHistoryButtonIsAssigned
+            ? null
+            : defaultSettings.gamepad.toggleHistoryButton;
+    }
     if (!validButton(value.gamepad.overlayButton) ||
-        !validButton(value.gamepad.toggleConnectionButton)) {
+        !validButton(value.gamepad.toggleConnectionButton) ||
+        !validButton(toggleHistoryButton)) {
         throw new Error("Controller button numbers must be between 0 and 31.");
     }
 
-    if (value.gamepad.overlayButton !== null &&
-        value.gamepad.overlayButton === value.gamepad.toggleConnectionButton) {
-        throw new Error("Overlay and connection must use different controller buttons.");
+    const assignedButtons = [
+        value.gamepad.overlayButton,
+        value.gamepad.toggleConnectionButton,
+        toggleHistoryButton
+    ].filter((button) => button !== null);
+    if (new Set(assignedButtons).size !== assignedButtons.length) {
+        throw new Error("Each controller action must use a different button.");
     }
 
     const overlayScale = value.overlayScale ?? defaultSettings.overlayScale;
@@ -316,7 +336,8 @@ function validateSettings(value) {
         },
         gamepad: {
             overlayButton: value.gamepad.overlayButton,
-            toggleConnectionButton: value.gamepad.toggleConnectionButton
+            toggleConnectionButton: value.gamepad.toggleConnectionButton,
+            toggleHistoryButton
         },
         overlayScale,
         positionX,
@@ -364,36 +385,31 @@ function sendSettingsUpdated() {
 function registerKeyboardShortcuts(nextSettings) {
     globalShortcut.unregisterAll();
 
-    try {
-        const overlayRegistered = globalShortcut.register(
-            nextSettings.keyboard.toggleOverlay,
-            toggleOverlay
-        );
-        const connectionRegistered = globalShortcut.register(
-            nextSettings.keyboard.toggleConnection,
-            () => setApiConnectionEnabled(!connectionEnabled)
-        );
-        const settingsRegistered = globalShortcut.register(
-            nextSettings.keyboard.toggleSettings,
-            toggleSettingsWindow
-        );
-        const historyRegistered = globalShortcut.register(
-            nextSettings.keyboard.toggleHistory,
-            toggleOverlayView
-        );
+    const shortcuts = [
+        ["overlay", nextSettings.keyboard.toggleOverlay, toggleOverlay],
+        ["API connection", nextSettings.keyboard.toggleConnection,
+            () => setApiConnectionEnabled(!connectionEnabled)],
+        ["settings", nextSettings.keyboard.toggleSettings, toggleSettingsWindow],
+        ["match history", nextSettings.keyboard.toggleHistory, toggleOverlayView]
+    ];
+    let allRegistered = true;
 
-        if (!overlayRegistered || !connectionRegistered || !settingsRegistered ||
-            !historyRegistered) {
-            globalShortcut.unregisterAll();
-            return false;
+    for (const [name, accelerator, callback] of shortcuts) {
+        try {
+            if (!globalShortcut.register(accelerator, callback)) {
+                allRegistered = false;
+                console.error(`Could not register the ${name} shortcut: ${accelerator}`);
+            }
+        } catch (error) {
+            allRegistered = false;
+            console.error(
+                `Could not register the ${name} shortcut (${accelerator}):`,
+                error.message
+            );
         }
-
-        return true;
-    } catch (error) {
-        globalShortcut.unregisterAll();
-        console.error("Could not register configured keyboard shortcuts:", error.message);
-        return false;
     }
+
+    return allRegistered;
 }
 
 function publishGamepadBindingResult(result) {
@@ -916,7 +932,9 @@ function saveSettings(nextValue) {
 }
 
 function startGamepadBinding(target) {
-    if (target !== "overlayButton" && target !== "toggleConnectionButton") {
+    if (target !== "overlayButton" &&
+        target !== "toggleConnectionButton" &&
+        target !== "toggleHistoryButton") {
         return;
     }
 
@@ -985,6 +1003,12 @@ function handleGamepadButtonChange(event, data) {
             heldConnectionButtons.delete(buttonId);
         }
     }
+
+    if (settings.gamepad.toggleHistoryButton === data.button && data.pressed &&
+        settings.gamepad.overlayButton !== null &&
+        heldOverlayButtons.has(`${data.controllerId}:${settings.gamepad.overlayButton}`)) {
+        toggleOverlayView();
+    }
 }
 
 function publishConnectionStatus() {
@@ -994,6 +1018,49 @@ function publishConnectionStatus() {
             enabled: connectionEnabled
         });
     }
+}
+
+function sendAppUpdateStatus(status) {
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+        settingsWindow.webContents.send("app-update-status", status);
+    }
+}
+
+function initializeAutoUpdater() {
+    if (!app.isPackaged) {
+        return;
+    }
+
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.on("checking-for-update", () => {
+        sendAppUpdateStatus({ state: "checking" });
+    });
+    autoUpdater.on("update-available", (info) => {
+        updateOperationActive = true;
+        sendAppUpdateStatus({ state: "downloading", version: info.version, percent: 0 });
+    });
+    autoUpdater.on("update-not-available", (info) => {
+        updateOperationActive = false;
+        sendAppUpdateStatus({ state: "up-to-date", version: info.version });
+    });
+    autoUpdater.on("download-progress", (progress) => {
+        sendAppUpdateStatus({
+            state: "downloading",
+            percent: Math.floor(progress.percent),
+            bytesPerSecond: progress.bytesPerSecond
+        });
+    });
+    autoUpdater.on("update-downloaded", (info) => {
+        updateOperationActive = false;
+        updateDownloaded = true;
+        sendAppUpdateStatus({ state: "downloaded", version: info.version });
+    });
+    autoUpdater.on("error", (error) => {
+        updateOperationActive = false;
+        console.error("Could not check or download an app update:", error.message);
+        sendAppUpdateStatus({ state: "error", message: error.message });
+    });
 }
 
 function connectToRocketLeague() {
@@ -1014,6 +1081,8 @@ function connectToRocketLeague() {
             return;
         }
 
+        clearTimeout(connectionMessageTimeout);
+        connectionMessageTimeout = null;
         console.log("Connected to Rocket League Stats API!");
         connectionStatus = { connected: true, receiving: false };
         publishConnectionStatus();
@@ -1024,8 +1093,20 @@ function connectToRocketLeague() {
             return;
         }
 
-        connectionStatus.receiving = true;
-        publishConnectionStatus();
+        clearTimeout(connectionMessageTimeout);
+        if (!connectionStatus.receiving) {
+            connectionStatus.receiving = true;
+            publishConnectionStatus();
+        }
+        connectionMessageTimeout = setTimeout(() => {
+            if (rocketLeagueSocket !== socket) {
+                return;
+            }
+
+            connectionMessageTimeout = null;
+            connectionStatus.receiving = false;
+            publishConnectionStatus();
+        }, CONNECTION_MESSAGE_TIMEOUT_MS);
 
         try {
             // Parse the outer message.
@@ -1291,6 +1372,8 @@ function connectToRocketLeague() {
         }
 
         rocketLeagueSocket = null;
+        clearTimeout(connectionMessageTimeout);
+        connectionMessageTimeout = null;
         console.log("Rocket League connection closed.");
         connectionStatus = { connected: false, receiving: false };
         publishConnectionStatus();
@@ -1298,6 +1381,9 @@ function connectToRocketLeague() {
 }
 
 function disconnectFromRocketLeague() {
+    clearTimeout(connectionMessageTimeout);
+    connectionMessageTimeout = null;
+
     if (!rocketLeagueSocket) {
         connectionStatus = { connected: false, receiving: false };
         publishConnectionStatus();
@@ -1400,6 +1486,7 @@ app.whenReady().then(() => {
 
     createOverlay();
     createStatusWindow();
+    initializeAutoUpdater();
     connectToRocketLeague();
 
     ipcMain.on("set-api-connection", (_event, enabled) => {
@@ -1420,7 +1507,11 @@ app.whenReady().then(() => {
             settings,
             filePath: settingsFilePath(),
             historyFilePath: matchHistoryFilePath(),
-            playerOptions: matchHistory.listPlayerOptions(savedMatches, players)
+            playerOptions: matchHistory.listPlayerOptions(savedMatches, players),
+            appInfo: {
+                isPackaged: app.isPackaged,
+                version: app.getVersion()
+            }
         };
     });
 
@@ -1429,6 +1520,48 @@ app.whenReady().then(() => {
             throw new Error("Only the settings window can update settings.");
         }
         return saveSettings(value);
+    });
+
+    ipcMain.handle("check-for-updates", async (event) => {
+        if (!settingsWindow || event.sender.id !== settingsWindow.webContents.id) {
+            throw new Error("Only the settings window can check for updates.");
+        }
+        if (!app.isPackaged) {
+            return { ok: false, error: "Updates are available only in the installed app." };
+        }
+        if (updateOperationActive) {
+            return { ok: false, error: "An update check or download is already in progress." };
+        }
+
+        updateOperationActive = true;
+        try {
+            await autoUpdater.checkForUpdates();
+            return { ok: true };
+        } catch (error) {
+            updateOperationActive = false;
+            sendAppUpdateStatus({ state: "error", message: error.message });
+            return { ok: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle("install-downloaded-update", (event) => {
+        if (!settingsWindow || event.sender.id !== settingsWindow.webContents.id) {
+            throw new Error("Only the settings window can install updates.");
+        }
+        if (!app.isPackaged || !updateDownloaded) {
+            return { ok: false, error: "There is no downloaded update to install." };
+        }
+
+        autoUpdater.quitAndInstall(false, true);
+        return { ok: true };
+    });
+
+    ipcMain.handle("close-app", (event) => {
+        if (!settingsWindow || event.sender.id !== settingsWindow.webContents.id) {
+            throw new Error("Only the settings window can close the app.");
+        }
+        app.quit();
+        return { ok: true };
     });
 
     ipcMain.on("start-gamepad-binding", (event, target) => {
