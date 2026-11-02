@@ -4,10 +4,6 @@ function signedNumber(value) {
     return value > 0 ? `+${value}` : String(value);
 }
 
-function formatPercentage(value) {
-    return Number.isFinite(value) ? `${Math.round(value)}%` : "—";
-}
-
 function HistoryCard({ label, value }) {
     return (
         <div className="history-card">
@@ -95,14 +91,12 @@ function OpponentTable({ opponents }) {
                         <th>Record</th>
                         <th>Goals For-Against</th>
                         <th>Diff.</th>
-                        <th>Kickoff W-L-D</th>
-                        <th>Kickoff %</th>
                         <th>Games</th>
                     </tr>
                 </thead>
                 <tbody>
                     {opponents.length === 0
-                        ? <tr><td className="empty" colSpan="7">No opponent records available.</td></tr>
+                        ? <tr><td className="empty" colSpan="5">No opponent records available.</td></tr>
                         : opponents.map((opponent) => (
                             <tr
                                 key={opponent.id}
@@ -113,8 +107,6 @@ function OpponentTable({ opponents }) {
                                 <td>{`${opponent.wins}-${opponent.losses}-${opponent.draws}`}</td>
                                 <td>{`${opponent.goalsFor}-${opponent.goalsAgainst}`}</td>
                                 <td>{signedNumber(opponent.goalsFor - opponent.goalsAgainst)}</td>
-                                <td>{`${opponent.kickoffWins}-${opponent.kickoffLosses}-${opponent.kickoffDraws}`}</td>
-                                <td>{formatPercentage(opponent.kickoffWinPercentage)}</td>
                                 <td>{opponent.games}</td>
                             </tr>
                         ))}
@@ -161,8 +153,6 @@ export default function MatchHistory({ history, settingsShortcut }) {
         ["Ball touches", stats.touches],
         ["Aerial hits", stats.aerialHits],
         ["Boost collected", stats.boostCollected],
-        ["Kickoff record", `${display.kickoffWins}-${display.kickoffLosses}-${display.kickoffDraws}`],
-        ["Kickoff win rate", formatPercentage(display.kickoffWinPercentage)],
         ["Own goals", stats.ownGoals]
     ];
     const status = `Last ${display.games} of ${summary.games} tracked matches · ` +
