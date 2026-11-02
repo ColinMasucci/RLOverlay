@@ -28,7 +28,7 @@ Only install builds downloaded from this repository's official Releases page.
 ## Publish releases and update the app
 
 Go to [Releases](https://github.com/ColinMasucci/RLOverlay/releases) on the right hand side and you can view and download the latest installer for RLOverlay.
-The only file you need to download is **RLOverlay-Setup-<version>.exe**.
+The only file you need to download is **RLOverlay-Setup-\<version\>.exe**.
 
 The app's Settings window can check public GitHub Releases and download an update.
 The updater does not fetch or execute source files from Git; it downloads the
