@@ -3,7 +3,7 @@
 Rocket League scoreboard and match-history overlay for Windows.  
 ## To Install:
 Go to [Releases](https://github.com/ColinMasucci/RLOverlay/releases) on the right hand side and you can view and download the latest installer for RLOverlay.
-The only file you need to download is **RLOverlay-Setup-<version>.exe**.
+The only file you need to download is **RLOverlay-Setup-\<version\>.exe**.
 
 ## Run from source
 
