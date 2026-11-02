@@ -24,11 +24,14 @@ Only install builds downloaded from this repository's official Releases page.
 
 ## Publish releases and update the app
 
+Go to 'Releases' on the right hand side and you can view and download the latest installer for RLOverlay.
+
 The app's Settings window can check public GitHub Releases and download an update.
 The updater does not fetch or execute source files from Git; it downloads the
 Windows installer update metadata and artifacts published for this repository.
 Updates are available only in the packaged app, not when running with `npm start`.
 
+Note for Dev:
 To publish a new Windows release, update the version in `package.json`, commit and
 push the change, then create and push a matching version tag (for example,
 `v1.0.1`). The GitHub Actions workflow builds the installer and publishes it as a
