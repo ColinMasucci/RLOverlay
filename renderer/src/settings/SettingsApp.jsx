@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import PartyApp from "../party/PartyApp.jsx";
 
 const statOptions = [
     ["score", "Score"], ["goals", "Goals"], ["assists", "Assists"],
@@ -57,6 +58,7 @@ export default function SettingsApp() {
     const [updateStatus, setUpdateStatus] = useState({ state: "idle" });
     const [updateBusy, setUpdateBusy] = useState(false);
     const [closing, setClosing] = useState(false);
+    const [activeTab, setActiveTab] = useState("settings");
 
     useEffect(() => {
         const api = window.rocketLeague;
@@ -207,7 +209,23 @@ export default function SettingsApp() {
     return (
         <main>
             <h1>Overlay Settings</h1>
-            <section className="settings-section">
+            <nav className="settings-tabs" aria-label="Settings sections">
+                <button
+                    type="button"
+                    className={activeTab === "settings" ? "active" : ""}
+                    onClick={() => setActiveTab("settings")}
+                >
+                    Overlay
+                </button>
+                <button
+                    type="button"
+                    className={activeTab === "imposter" ? "active" : ""}
+                    onClick={() => setActiveTab("imposter")}
+                >
+                    Imposter
+                </button>
+            </nav>
+            <section className="settings-section" hidden={activeTab !== "settings"}>
                 <h2>Keyboard shortcuts</h2>
                 <p className="help">Use Electron accelerator format, such as F8 or Ctrl+Shift+O.</p>
                 {keyboardOptions.map(([key, label]) => (
@@ -224,7 +242,7 @@ export default function SettingsApp() {
                 ))}
             </section>
 
-            <section className="settings-section">
+            <section className="settings-section" hidden={activeTab !== "settings"}>
                 <h2>Controller buttons</h2>
                 <p className="help">Hold the overlay button while pressing the history button to switch tabs.</p>
                 {[
@@ -254,7 +272,7 @@ export default function SettingsApp() {
                 ))}
             </section>
 
-            <section className="settings-section">
+            <section className="settings-section" hidden={activeTab !== "settings"}>
                 <h2>Scoreboard stats</h2>
                 <div className="stat-options">
                     {statOptions.map(([key, label]) => (
@@ -270,7 +288,7 @@ export default function SettingsApp() {
                 </div>
             </section>
 
-            <section className="settings-section">
+            <section className="settings-section" hidden={activeTab !== "settings"}>
                 <h2>Match history</h2>
                 <Field label="Your player" htmlFor="tracked-player">
                     <select
@@ -308,7 +326,7 @@ export default function SettingsApp() {
                 </p>
             </section>
 
-            <section className="settings-section">
+            <section className="settings-section" hidden={activeTab !== "settings"}>
                 <h2>Appearance</h2>
                 <RangeField
                     label="Overlay size"
@@ -390,7 +408,7 @@ export default function SettingsApp() {
                 </Field>
             </section>
 
-            <section className="settings-section">
+            <section className="settings-section" hidden={activeTab !== "settings"}>
                 <h2>App updates</h2>
                 <p className="help">Installed version: {appInfo.version || "Unknown"}</p>
                 <p className={`help${updateStatus.state === "error" ? " settings-message error" : ""}`}
@@ -413,7 +431,7 @@ export default function SettingsApp() {
                 </div>
             </section>
 
-            <div className="settings-footer">
+            <div className="settings-footer" hidden={activeTab !== "settings"}>
                 <span className="file-path">{filePath}</span>
                 <div className="settings-actions">
                     <button type="button" disabled={saving} onClick={() => save()}>
@@ -424,9 +442,15 @@ export default function SettingsApp() {
                     </button>
                 </div>
             </div>
-            <div className={`settings-message${isError ? " error" : ""}`} role="status" aria-live="polite">
+            <div
+                className={`settings-message${isError ? " error" : ""}`}
+                role="status"
+                aria-live="polite"
+                hidden={activeTab !== "settings"}
+            >
                 {message}
             </div>
+            {activeTab === "imposter" && <PartyApp />}
         </main>
     );
 }

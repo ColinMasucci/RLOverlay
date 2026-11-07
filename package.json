@@ -5,7 +5,10 @@
   "main": "main.js",
   "scripts": {
     "start": "npm run build && electron .",
+    "dev": "vite --config vite.config.js",
     "build": "vite build --config vite.config.js",
+    "imposter-server": "node imposter-server.js",
+    "test": "node --test",
     "dist:win": "npm run build && electron-builder --win nsis --publish never"
   },
   "keywords": [],
@@ -23,6 +26,7 @@
     "vite": "^6.0.7"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
     "electron-updater": "^6.8.11",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -48,7 +52,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "artifactName": "${productName}-Setup-${version}.${ext}"

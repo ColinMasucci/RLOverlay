@@ -1,0 +1,27 @@
+Fix Ariel stat
+
+Heatmap sometimes doesnt have the defensive end towards the bottom. This is because the player never set themselves as the player in the settings. This should be auto set after a certain amount of games.
+
+Add percentages for the amount of touches made in each third of the field.
+
+Continue with Imposter Game.
+
+Make feature where you can reoprt players with message and theyll pop up before games.
+
+Make it so the players in your game show up in the head to head even if all the stats are 0s.
+
+Make a max amount of players shown in the head to head. Make it 10.
+
+Add feature that allows user to change the amount of messages sent through API. Add note that they need to restart RL.
+
+Reorder Settings so they are sorted into tabs more nicely.
+
+Add default settings that are first set on install. Then add revert to defaults button.
+
+Reword button mappings so they make more sense.
+
+Get more stats from the RL tracker website.
+
+add settings keybind for controller.
+
+Clean readme me so it is just install instructions, how to run locally, and then helpful settings navigation.

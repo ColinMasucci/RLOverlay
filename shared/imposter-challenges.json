@@ -1,0 +1,32 @@
+[
+  {
+    "id": "own_goal",
+    "label": "Score an own goal",
+    "tracking": "automatic"
+  },
+  {
+    "id": "three_demos",
+    "label": "Get 3 demos",
+    "tracking": "automatic"
+  },
+  {
+    "id": "bump_teammates",
+    "label": "Bump teammates 5 times",
+    "tracking": "manual"
+  },
+  {
+    "id": "lose_kickoffs",
+    "label": "Lose every kickoff",
+    "tracking": "manual"
+  },
+  {
+    "id": "no_goals",
+    "label": "Do not score",
+    "tracking": "automatic"
+  },
+  {
+    "id": "stay_in_half",
+    "label": "Do not leave your half in the last minute",
+    "tracking": "manual"
+  }
+]

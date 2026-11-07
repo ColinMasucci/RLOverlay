@@ -10,6 +10,8 @@ let overlayWindow;
 let statusWindow;
 let settingsWindow;
 let trackerWindow;
+let imposterWindow;
+let imposterSession = null;
 let rocketLeagueSocket;
 let trackerLookupGeneration = 0;
 let updateDownloaded = false;
@@ -854,6 +856,47 @@ function toggleSettingsWindow() {
     settingsWindow.show();
 }
 
+function openImposterWindow(session = imposterSession) {
+    if (!session?.token || !session.serverUrl) {
+        throw new Error("Join an imposter lobby before opening the game window.");
+    }
+    imposterSession = session;
+    if (imposterWindow && !imposterWindow.isDestroyed()) {
+        imposterWindow.show();
+        imposterWindow.focus();
+        return;
+    }
+
+    const { workArea } = screen.getPrimaryDisplay();
+    imposterWindow = new BrowserWindow({
+        width: 360,
+        height: 300,
+        x: workArea.x + 16,
+        y: workArea.y + 16,
+        show: false,
+        frame: false,
+        alwaysOnTop: true,
+        resizable: true,
+        skipTaskbar: true,
+        backgroundColor: "#111827",
+        webPreferences: {
+            preload: path.join(__dirname, "preload.js"),
+            contextIsolation: true,
+            nodeIntegration: false
+        }
+    });
+    imposterWindow.on("closed", () => {
+        imposterWindow = null;
+    });
+    imposterWindow.loadFile(path.join(__dirname, "dist", "party.html"), {
+        query: { overlay: "1" }
+    });
+    imposterWindow.once("ready-to-show", () => {
+        imposterWindow?.show();
+        imposterWindow?.setAlwaysOnTop(true, "screen-saver");
+    });
+}
+
 function toggleOverlayView() {
     overlayView = overlayView === "scoreboard" ? "history" : "scoreboard";
     if (overlayWindow && !overlayWindow.isDestroyed()) {
@@ -1140,6 +1183,12 @@ function connectToRocketLeague() {
             }
 
             if (["MatchEnded", "MatchFinished", "GameEnded"].includes(message.Event)) {
+                publishImposterGameStats(data?.Players?.length ? data.Players : players, true);
+                for (const window of [settingsWindow, imposterWindow]) {
+                    if (window && !window.isDestroyed()) {
+                        window.webContents.send("imposter-match-ended");
+                    }
+                }
                 if (matchHasState) {
                     archiveCurrentMatch(currentMatchGuid, players);
                 }
@@ -1352,6 +1401,7 @@ function connectToRocketLeague() {
                 // Send the updated player list to the overlay.
                 sendPlayersUpdated();
                 sendMatchHistoryUpdated();
+                publishImposterGameStats(matchPlayers);
                 if (newPlayersJoined) {
                     queueTrackerRankLookup(matchEpochNumber);
                 }
@@ -1417,6 +1467,40 @@ function getMatchPlayerId(player) {
         return player.PrimaryId.trim();
     }
     return `name:${player.Name.trim().toLowerCase()}`;
+}
+
+function publishImposterGameStats(sourcePlayers, matchEnded = false) {
+    if (!settings.trackedPlayerId) {
+        return;
+    }
+    const player = (sourcePlayers ?? []).find((candidate) => {
+        const id = candidate.PrimaryId ?? candidate.id;
+        const name = candidate.Name ?? candidate.name;
+        return id === settings.trackedPlayerId ||
+            (typeof name === "string" &&
+                `name:${name.trim().toLowerCase()}` === settings.trackedPlayerId);
+    });
+    if (!player) {
+        return;
+    }
+    const name = player.Name ?? player.name;
+    const key = getPlayerKey({
+        TeamNum: player.TeamNum ?? player.team,
+        Name: name,
+        Shortcut: player.Shortcut ?? player.shortcut
+    });
+    const stats = {
+        playerName: name,
+        ownGoals: ownGoalsByPlayer.get(key) ?? player.ownGoals ?? 0,
+        demos: player.Demos ?? player.demos ?? 0,
+        goals: player.Goals ?? player.goals ?? 0,
+        matchEnded
+    };
+    for (const window of [settingsWindow, imposterWindow]) {
+        if (window && !window.isDestroyed()) {
+            window.webContents.send("imposter-game-stats", stats);
+        }
+    }
 }
 
 function recordKickoffResult(result) {
@@ -1520,6 +1604,47 @@ app.whenReady().then(() => {
             throw new Error("Only the settings window can update settings.");
         }
         return saveSettings(value);
+    });
+
+    ipcMain.handle("get-imposter-session", (event) => {
+        if (![settingsWindow, imposterWindow].some((window) =>
+            window && event.sender.id === window.webContents.id
+        )) {
+            throw new Error("Imposter sessions are only available to imposter windows.");
+        }
+        return imposterSession;
+    });
+
+    ipcMain.handle("save-imposter-session", (event, session) => {
+        if (![settingsWindow, imposterWindow].some((window) =>
+            window && event.sender.id === window.webContents.id
+        )) {
+            throw new Error("Only imposter windows can update the lobby session.");
+        }
+        if (session !== null && (!session || typeof session.token !== "string" ||
+            typeof session.serverUrl !== "string" || typeof session.playerId !== "string")) {
+            throw new Error("Invalid imposter lobby session.");
+        }
+        imposterSession = session;
+        return { ok: true };
+    });
+
+    ipcMain.handle("open-imposter-window", (event, session) => {
+        if (!settingsWindow || event.sender.id !== settingsWindow.webContents.id) {
+            throw new Error("Only Settings can open the imposter game window.");
+        }
+        openImposterWindow(session);
+        return { ok: true };
+    });
+
+    ipcMain.handle("close-imposter-window", (event) => {
+        if (!settingsWindow || event.sender.id !== settingsWindow.webContents.id) {
+            throw new Error("Only Settings can close the imposter game window.");
+        }
+        if (imposterWindow && !imposterWindow.isDestroyed()) {
+            imposterWindow.close();
+        }
+        return { ok: true };
     });
 
     ipcMain.handle("check-for-updates", async (event) => {

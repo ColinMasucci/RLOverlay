@@ -1,7 +1,7 @@
 # RLOverlay
 
 Rocket League scoreboard and match-history overlay for Windows.  
-## To Install:
+## How To Install:
 Go to [Releases](https://github.com/ColinMasucci/RLOverlay/releases) on the right hand side and you can view and download the latest installer for RLOverlay.
 The only file you need to download is **RLOverlay-Setup-\<version\>.exe**.
 
@@ -44,6 +44,49 @@ updates** in Settings afterward; they do not need Git or Node.js.
 
 For the first release of the current `1.0.0` version, push the `v1.0.0` tag after
 the repository is on GitHub. GitHub Actions must be enabled for the repository.
+
+## Imposter game
+
+The browser game is served at `/` and `/party.html`. Locally, run `npm run dev`
+and open `http://localhost:5173/` (or `http://localhost:5173/party.html`).
+The browser version uses Supabase
+Database RPCs for lobby actions and Supabase Realtime Broadcast for live
+updates. The existing Electron game continues to use the Node WebSocket service
+(`npm run imposter-server`); the desktop overlay integration can be migrated
+after the website workflow is verified.
+
+### Set up Supabase and Vercel
+
+1. In the Supabase SQL Editor, run [`supabase/schema.sql`](./supabase/schema.sql).
+   It creates the lobby, player, private session, and secret-vote tables plus
+   the RPC functions the browser uses. Player roles and votes are not directly
+   readable by the public browser key. Lobbies are removed after 24 hours of
+   inactivity when a new lobby is created.
+2. In Vercel, import this repository and set **Root Directory** to the
+   repository root (`.`), not `renderer`. The Vite configuration builds the
+   website to `dist`; use `npm run build` as the build command and `dist` as
+   the output directory.
+3. Add these Vercel environment variables for the Production, Preview, and
+   Development environments, then redeploy:
+   - `VITE_SUPABASE_URL`: the project URL from Supabase.
+   - `VITE_SUPABASE_PUBLISHABLE_KEY`: the project's publishable (or legacy
+     anon) key. This key is public in a browser build; never use the
+     `service_role` key here.
+4. For local browser development, copy `.env.example` to `.env.local`, fill in
+   the same two values, then run `npm run dev`.
+
+The website uses anonymous lobby sessions rather than Supabase user accounts.
+Each browser gets a random session token; clearing that browser's local storage
+will end its ability to resume its lobby seat. Roles and secret votes are only
+returned by token-checked database functions. The publishable key is expected
+to be visible to website visitors, so do not add a service-role key to Vercel
+client-side environment variables.
+
+Web players self-report challenges because a website cannot read Rocket League
+match data. The Electron desktop game can use its selected in-game player to
+automatically track own goals, three demos, and no-goals-at-match-end challenges
+when the Rocket League API is connected; it still uses the separate WebSocket
+service for now.
 
 ## Local data and public repository
 

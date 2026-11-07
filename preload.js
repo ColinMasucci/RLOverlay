@@ -133,5 +133,27 @@ contextBridge.exposeInMainWorld("rocketLeague", {
         return () => {
             ipcRenderer.removeListener("match-history-file-path", listener);
         };
+    },
+    getImposterSession() {
+        return ipcRenderer.invoke("get-imposter-session");
+    },
+    saveImposterSession(session) {
+        return ipcRenderer.invoke("save-imposter-session", session);
+    },
+    openImposterWindow(session) {
+        return ipcRenderer.invoke("open-imposter-window", session);
+    },
+    closeImposterWindow() {
+        return ipcRenderer.invoke("close-imposter-window");
+    },
+    onImposterMatchEnded(callback) {
+        const listener = () => callback();
+        ipcRenderer.on("imposter-match-ended", listener);
+        return () => ipcRenderer.removeListener("imposter-match-ended", listener);
+    },
+    onImposterGameStats(callback) {
+        const listener = (_event, stats) => callback(stats);
+        ipcRenderer.on("imposter-game-stats", listener);
+        return () => ipcRenderer.removeListener("imposter-game-stats", listener);
     }
 });
