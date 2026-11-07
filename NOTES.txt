@@ -5,6 +5,9 @@ Heatmap sometimes doesnt have the defensive end towards the bottom. This is beca
 Add percentages for the amount of touches made in each third of the field.
 
 Continue with Imposter Game.
+    Add picture of rocketLeague car to main page
+    Edit format so its less like html page. Center things
+    LobbyCode within textbar is cut off
 
 Make feature where you can reoprt players with message and theyll pop up before games.
 

@@ -62,17 +62,24 @@ updates. The existing Electron game continues to use the Node WebSocket service
    the RPC functions the browser uses. Player roles and votes are not directly
    readable by the public browser key. Lobbies are removed after 24 hours of
    inactivity when a new lobby is created.
-2. In Vercel, import this repository and set **Root Directory** to the
+2. Then run [`supabase/migrations/20261107000000_speed_mode_and_chat.sql`](./supabase/migrations/20261107000000_speed_mode_and_chat.sql)
+   to add speed mode, round chat, and settings locking. Existing Supabase
+   projects should run this migration; it upgrades the existing tables in
+   place without deleting lobby data.
+3. Run [`supabase/migrations/20261107010000_restore_lobby_rpc_permissions.sql`](./supabase/migrations/20261107010000_restore_lobby_rpc_permissions.sql)
+   to ensure the public game client can execute the ready, end-voting, and
+   next-round functions.
+4. In Vercel, import this repository and set **Root Directory** to the
    repository root (`.`), not `renderer`. The Vite configuration builds the
    website to `dist`; use `npm run build` as the build command and `dist` as
    the output directory.
-3. Add these Vercel environment variables for the Production, Preview, and
+5. Add these Vercel environment variables for the Production, Preview, and
    Development environments, then redeploy:
    - `VITE_SUPABASE_URL`: the project URL from Supabase.
    - `VITE_SUPABASE_PUBLISHABLE_KEY`: the project's publishable (or legacy
      anon) key. This key is public in a browser build; never use the
      `service_role` key here.
-4. For local browser development, copy `.env.example` to `.env.local`, fill in
+6. For local browser development, copy `.env.example` to `.env.local`, fill in
    the same two values, then run `npm run dev`.
 
 The website uses anonymous lobby sessions rather than Supabase user accounts.
@@ -86,7 +93,10 @@ Web players self-report challenges because a website cannot read Rocket League
 match data. The Electron desktop game can use its selected in-game player to
 automatically track own goals, three demos, and no-goals-at-match-end challenges
 when the Rocket League API is connected; it still uses the separate WebSocket
-service for now.
+service for now. Browser lobbies also support a manually reported speed-target
+mode, anonymous round chat, and settings that lock after the first round starts.
+In hidden-imposter speed rounds, the imposter gets a different target and chat
+uses neutral player labels; hints are disabled so the imposter is not exposed.
 
 ## Local data and public repository
 
