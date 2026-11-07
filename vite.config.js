@@ -30,6 +30,7 @@ module.exports = defineConfig({
         rollupOptions: {
             input: {
                 index: path.join(__dirname, "renderer", "index.html"),
+                overlay: path.join(__dirname, "renderer", "overlay.html"),
                 settings: path.join(__dirname, "renderer", "settings.html"),
                 status: path.join(__dirname, "renderer", "status.html"),
                 party: path.join(__dirname, "renderer", "party.html")

@@ -760,7 +760,7 @@ function createOverlay() {
         overlayWindow.moveTop();
     });
 
-    overlayWindow.loadFile(path.join(__dirname, "dist", "index.html"));
+    overlayWindow.loadFile(path.join(__dirname, "dist", "overlay.html"));
     overlayWindow.webContents.on("did-finish-load", () => {
         overlayWindow.webContents.setZoomFactor(settings.overlayScale);
         positionOverlay();
