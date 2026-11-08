@@ -1960,6 +1960,18 @@ button {
 }
 
 @media (max-width: 760px) {
+    html.party-document,
+    body.party-page {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: hidden;
+        overscroll-behavior-x: none;
+    }
+
+    body.party-page {
+        position: relative;
+    }
+
     .party-page .party-app {
         width: min(100% - 24px, 620px);
         padding-top: 20px;
