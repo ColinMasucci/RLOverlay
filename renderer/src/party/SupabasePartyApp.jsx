@@ -113,6 +113,45 @@ function PlayerList({ players, selfId }) {
 }
 
 function RoleCard({ role, settings, challengeLabel, speedTarget, speedHint, roleHidden }) {
+    const [displayChallenge, setDisplayChallenge] = useState(challengeLabel);
+    const [isRevealing, setIsRevealing] = useState(false);
+    const availableChallenges = challengeOptions
+        .filter(({ id }) => settings.enabledChallenges.includes(id))
+        .map(({ label }) => label);
+    const challengeCycle = availableChallenges.includes(challengeLabel)
+        ? availableChallenges
+        : [...availableChallenges, challengeLabel].filter(Boolean);
+
+    useEffect(() => {
+        setDisplayChallenge(challengeLabel);
+        if (role !== "imposter" || roleHidden || settings.gameMode !== "challenge" ||
+            !challengeLabel || challengeCycle.length < 2 ||
+            window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            setIsRevealing(false);
+            return undefined;
+        }
+
+        setIsRevealing(true);
+        let step = 0;
+        let timeout;
+        const revealNextChallenge = () => {
+            if (step >= 24) {
+                setDisplayChallenge(challengeLabel);
+                setIsRevealing(false);
+                return;
+            }
+            setDisplayChallenge(challengeCycle[step % challengeCycle.length]);
+            step += 1;
+            const progress = step / 24;
+            timeout = window.setTimeout(revealNextChallenge, 35 + Math.round(progress * progress * 180));
+        };
+        revealNextChallenge();
+
+        return () => {
+            window.clearTimeout(timeout);
+        };
+    }, [challengeLabel, challengeCycle.join("|"), role, roleHidden, settings.gameMode]);
+
     const appearsSafe = role !== "imposter" || roleHidden;
     let task;
     if (settings.gameMode === "speed") {
@@ -128,7 +167,7 @@ function RoleCard({ role, settings, challengeLabel, speedTarget, speedHint, role
             }
         }
     } else if (role === "imposter") {
-        task = `Your task: ${challengeLabel}.`;
+        task = `Your task: ${displayChallenge}.`;
     } else {
         task = "There is an imposter among you. Guess who they are and their task.";
     }
@@ -137,7 +176,9 @@ function RoleCard({ role, settings, challengeLabel, speedTarget, speedHint, role
         <div className={`party-role-card ${appearsSafe ? "is-safe" : "is-imposter"}`}>
             <div className="party-role-inset">
                 <span className="party-role-label">{appearsSafe ? "SAFE" : "IMPOSTER"}</span>
-                <p>{task}</p>
+                <p className={isRevealing ? "is-revealing" : ""} aria-live={isRevealing ? "off" : "polite"}>
+                    {task}
+                </p>
             </div>
         </div>
     );
@@ -157,6 +198,7 @@ function PartyApp() {
     const [selectedSuspects, setSelectedSuspects] = useState([]);
     const [settings, setSettings] = useState(emptySettings);
     const [chatDraft, setChatDraft] = useState("");
+    const [chatOpen, setChatOpen] = useState(true);
     const [message, setMessage] = useState("");
     const [busy, setBusy] = useState(false);
 
@@ -763,14 +805,17 @@ function PartyApp() {
                     </p>
                     <div className="party-vote-list">
                         {room.players.filter((player) => player.id !== session.playerId).map((player) => (
-                            <label className="party-check" key={player.id}>
+                            <label
+                                className={`party-check party-vote-option ${selectedSuspects.includes(player.id) ? "is-selected" : ""} ${self?.voted || busy ? "is-disabled" : ""}`}
+                                key={player.id}
+                            >
                                 <input
                                     type="checkbox"
                                     checked={selectedSuspects.includes(player.id)}
                                     disabled={self?.voted || busy}
                                     onChange={() => toggleSuspect(player.id)}
                                 />
-                                {player.name}
+                                <span>{player.name}</span>
                             </label>
                         ))}
                     </div>
@@ -828,42 +873,65 @@ function PartyApp() {
             )}
 
             {room.settings.chatEnabled && ["playing", "voting"].includes(room.phase) && (
-                <section className="party-panel party-chat">
-                    <div className="party-panel-heading">
-                        <div>
-                            <span className="party-eyebrow">SAY IT ANONYMOUSLY</span>
-                            <h2>Round chat</h2>
-                        </div>
-                        <span className="party-chat-privacy">No names shown</span>
-                    </div>
-                    <div className="party-chat-messages" aria-live="polite">
-                        {messages.length ? messages.map((item) => (
-                            <article className="party-chat-message" key={item.id}>
-                                <span className={`party-chat-role ${item.roleLabel === "Imposter" ? "is-imposter" : ""}`}>
-                                    {item.roleLabel}
-                                </span>
-                                <p>{item.content}</p>
-                            </article>
-                        )) : <p className="party-chat-empty">No messages yet. Start the conversation.</p>}
-                    </div>
-                    <form className="party-chat-form" onSubmit={sendChatMessage}>
-                        <input
-                            value={chatDraft}
-                            onChange={(event) => setChatDraft(event.target.value)}
-                            maxLength={500}
-                            placeholder="Send an anonymous message…"
-                            aria-label="Anonymous chat message"
-                            disabled={busy}
-                        />
-                        <button
-                            className="party-primary-button"
-                            type="submit"
-                            disabled={busy || !chatDraft.trim()}
-                        >
-                            Send
-                        </button>
-                    </form>
-                </section>
+                <aside className="party-chat-dock" id="party-round-chat">
+                    {chatOpen && (
+                        <section className="party-panel party-chat">
+                            <div className="party-panel-heading">
+                                <div>
+                                    <span className="party-eyebrow">SAY IT ANONYMOUSLY</span>
+                                    <h2>Round chat</h2>
+                                </div>
+                                <span className="party-chat-privacy">No names shown</span>
+                            </div>
+                            <div className="party-chat-messages" aria-live="polite">
+                                {messages.length ? messages.map((item) => (
+                                    <article className="party-chat-message" key={item.id}>
+                                        <span className={`party-chat-role ${item.roleLabel === "Imposter" ? "is-imposter" : ""}`}>
+                                            {item.roleLabel}
+                                        </span>
+                                        <p>{item.content}</p>
+                                    </article>
+                                )) : <p className="party-chat-empty">No messages yet. Start the conversation.</p>}
+                            </div>
+                            <form className="party-chat-form" onSubmit={sendChatMessage}>
+                                <input
+                                    value={chatDraft}
+                                    onChange={(event) => setChatDraft(event.target.value)}
+                                    maxLength={500}
+                                    placeholder="Send an anonymous message…"
+                                    aria-label="Anonymous chat message"
+                                    disabled={busy}
+                                />
+                                <button
+                                    className="party-primary-button"
+                                    type="submit"
+                                    disabled={busy || !chatDraft.trim()}
+                                >
+                                    Send
+                                </button>
+                            </form>
+                        </section>
+                    )}
+                    <button
+                        className="party-chat-toggle"
+                        type="button"
+                        aria-label={chatOpen ? "Collapse round chat" : "Open round chat"}
+                        aria-expanded={chatOpen}
+                        aria-controls="party-round-chat"
+                        onClick={() => setChatOpen((open) => !open)}
+                    >
+                        {chatOpen ? (
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M6 9l6 6 6-6" />
+                            </svg>
+                        ) : (
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5 8 8 0 0 1-3.1-.6L4 20l1.5-4A7.5 7.5 0 1 1 20 11.5Z" />
+                                <path d="M8.5 11.5h.01M12.5 11.5h.01M16.5 11.5h.01" />
+                            </svg>
+                        )}
+                    </button>
+                </aside>
             )}
             {message && <p className="party-message" role="status">{message}</p>}
         </main>

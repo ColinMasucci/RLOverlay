@@ -1488,9 +1488,9 @@ button {
 }
 
 .party-page .party-role-card {
-    width: min(100%, 830px);
-    min-height: 340px;
-    padding: 12px;
+    width: min(100%, 740px);
+    min-height: 300px;
+    padding: 10px;
     border: 1px solid;
     border-radius: 28px;
 }
@@ -1512,8 +1512,8 @@ button {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 314px;
-    padding: 30px;
+    min-height: 278px;
+    padding: 26px;
     border: 1px solid rgba(255, 255, 255, 0.13);
     border-radius: 20px;
     background: rgba(5, 11, 18, 0.56);
@@ -1544,6 +1544,30 @@ button {
     font-size: clamp(18px, 2.8vw, 25px);
     font-weight: 750;
     line-height: 1.55;
+}
+
+.party-page .party-role-inset > p.is-revealing {
+    animation: party-challenge-spin 180ms linear infinite alternate;
+}
+
+@keyframes party-challenge-spin {
+    from {
+        opacity: 0.62;
+        filter: blur(1.5px);
+        transform: translateY(-3px);
+    }
+
+    to {
+        opacity: 1;
+        filter: blur(0);
+        transform: translateY(3px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .party-page .party-role-inset > p.is-revealing {
+        animation: none;
+    }
 }
 
 .party-page .party-role-hint {
@@ -1577,6 +1601,51 @@ button {
     gap: 4px 18px;
 }
 
+.party-page .party-vote-option {
+    min-height: 68px;
+    gap: 14px;
+    padding: 14px 18px;
+    color: #f1f6ff;
+    border: 1px solid #35465d;
+    border-radius: 12px;
+    background: rgba(13, 23, 37, 0.82);
+    font-size: 19px;
+    font-weight: 800;
+    line-height: 1.25;
+    cursor: pointer;
+    transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.party-page .party-vote-option:hover:not(.is-disabled) {
+    border-color: #5daee8;
+    background: rgba(27, 49, 72, 0.92);
+    transform: translateY(-1px);
+}
+
+.party-page .party-vote-option:focus-within {
+    outline: 2px solid #7dd6ff;
+    outline-offset: 2px;
+}
+
+.party-page .party-vote-option.is-selected {
+    border-color: #47c9ff;
+    background: linear-gradient(120deg, rgba(20, 107, 154, 0.52), rgba(31, 69, 107, 0.84));
+    box-shadow: inset 0 0 0 1px rgba(104, 211, 255, 0.38), 0 0 18px rgba(44, 177, 245, 0.2);
+}
+
+.party-page .party-vote-option input {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+    margin: 0;
+    accent-color: #35bdff;
+}
+
+.party-page .party-vote-option.is-disabled {
+    cursor: default;
+    opacity: 0.75;
+}
+
 .party-page .party-results .party-result-player {
     margin: 5px 0;
     border: 1px solid #2b394d;
@@ -1590,12 +1659,69 @@ button {
 }
 
 .party-page .party-chat {
-    margin-top: 16px;
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 12px);
+    display: flex;
+    flex-direction: column;
+    width: min(380px, calc(100vw - 32px));
+    max-width: none;
+    max-height: min(520px, calc(100vh - 112px));
+    margin: 0;
+    padding: 18px;
+    border-color: rgba(112, 149, 190, 0.55);
+    background: rgba(10, 18, 30, 0.97);
+    box-shadow: 0 18px 56px rgba(0, 0, 0, 0.56);
+    backdrop-filter: blur(16px);
+    overflow: hidden;
+}
+
+.party-page .party-chat-dock {
+    position: fixed;
+    right: 24px;
+    bottom: 22px;
+    z-index: 20;
+}
+
+.party-page .party-chat-toggle {
+    display: grid;
+    width: 58px;
+    height: 58px;
+    place-items: center;
+    padding: 0;
+    color: #06121c;
+    border: 1px solid rgba(132, 220, 255, 0.8);
+    border-radius: 50%;
+    background: linear-gradient(145deg, #72d6ff, #35a9ed);
+    box-shadow: 0 8px 26px rgba(31, 164, 232, 0.42);
+    cursor: pointer;
+    transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+.party-page .party-chat-toggle:hover {
+    box-shadow: 0 10px 32px rgba(31, 164, 232, 0.6);
+    transform: translateY(-2px);
+}
+
+.party-page .party-chat-toggle:focus-visible {
+    outline: 3px solid #d5f4ff;
+    outline-offset: 3px;
+}
+
+.party-page .party-chat-toggle svg {
+    width: 25px;
+    height: 25px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
 }
 
 .party-page .party-chat-messages {
     display: flex;
     flex-direction: column;
+    flex: 1 1 auto;
     gap: 8px;
     max-height: 290px;
     min-height: 68px;
@@ -1705,13 +1831,13 @@ button {
     }
 
     .party-page .party-role-card {
-        min-height: 280px;
+        min-height: 250px;
         padding: 9px;
         border-radius: 22px;
     }
 
     .party-page .party-role-inset {
-        min-height: 260px;
+        min-height: 230px;
         padding: 20px;
     }
 }
@@ -1726,6 +1852,16 @@ button {
     .party-page .party-toggle-grid,
     .party-page .party-vote-list {
         grid-template-columns: 1fr;
+    }
+
+    .party-page .party-chat-dock {
+        right: 14px;
+        bottom: 14px;
+    }
+
+    .party-page .party-chat {
+        max-height: min(520px, calc(100vh - 96px));
+        padding: 15px;
     }
 
     .party-page .party-settings-grid .party-field:nth-child(3):last-child {
