@@ -587,7 +587,9 @@ button {
 
 .party-host-settings fieldset {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 6px;
+    min-width: 0;
     margin: 10px 0;
     padding: 8px;
     border: 1px solid #34445c;
@@ -1110,6 +1112,9 @@ button {
 .party-page .party-room-shell {
     align-items: stretch;
     width: min(100% - 36px, 1050px);
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
 }
 
 .party-page .party-header {
@@ -1219,10 +1224,12 @@ button {
     grid-template-columns: minmax(270px, 0.78fr) minmax(0, 1.5fr);
     align-items: start;
     gap: 16px;
+    min-width: 0;
 }
 
 .party-page .party-panel {
     min-width: 0;
+    max-width: 100%;
     padding: 22px;
     border: 1px solid #293850;
     border-radius: 16px;
@@ -1374,42 +1381,83 @@ button {
 .party-page .party-settings-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
     gap: 13px;
+    min-width: 0;
 }
 
 .party-page .party-settings-grid .party-field {
+    min-width: 0;
     margin-bottom: 0;
-}
-
-.party-page .party-settings-grid .party-field:nth-child(3):last-child {
-    grid-column: 1 / -1;
-}
-
-.party-page .party-imposter-count-field > .party-toggle {
-    margin-top: 10px;
 }
 
 .party-page .party-imposter-range {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: end;
     gap: 9px;
-    margin-top: 8px;
+    min-height: 67px;
+    margin-top: 3px;
 }
 
 .party-page .party-imposter-range .party-field {
     min-width: 0;
 }
 
+.party-page .party-imposter-range-placeholder {
+    min-height: 1px;
+}
+
+.party-page .party-imposter-count-field .party-toggle {
+    min-height: 26px;
+    margin-top: 6px;
+}
+
 .party-page .party-range-note {
     display: block;
-    margin-top: 7px;
+    min-height: 32px;
+    margin-top: 2px;
     color: #8fa1b8;
     font-size: 11px;
     line-height: 1.4;
 }
 
+.party-page .party-game-mode-field select,
+.party-page .party-imposter-count-field select,
+.party-page .party-challenge-assignment select {
+    min-height: 42px;
+    padding: 8px 11px;
+}
+
+.party-page .party-game-mode-field {
+    gap: 5px;
+}
+
+.party-page .party-settings-divider {
+    height: 1px;
+    margin: 18px 0 15px;
+    border: 0;
+    background: linear-gradient(90deg, transparent, rgba(125, 164, 207, 0.38) 10%, rgba(125, 164, 207, 0.38) 90%, transparent);
+}
+
+.party-page .party-host-settings {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.party-page .party-host-settings select {
+    max-width: 100%;
+}
+
+.party-page .party-challenge-assignment {
+    max-width: 420px;
+    margin-bottom: 13px;
+}
+
 .party-page .party-challenge-options {
     min-width: 0;
+    max-width: 100%;
+    width: 100%;
     margin: 15px 0;
     padding: 12px;
     border: 1px solid #34445c;
@@ -1417,6 +1465,7 @@ button {
 }
 
 .party-page .party-challenge-options legend {
+    max-width: 100%;
     padding: 0 6px;
     color: #aabbd2;
     font-size: 11px;
@@ -1430,10 +1479,12 @@ button {
 .party-page .party-challenge-groups {
     display: grid;
     gap: 7px;
+    min-width: 0;
 }
 
 .party-page .party-challenge-category {
     min-width: 0;
+    max-width: 100%;
     padding: 9px 11px;
     border: 1px solid #2e4057;
     border-radius: 9px;
@@ -1452,9 +1503,15 @@ button {
 }
 
 .party-page .party-challenge-category summary span:last-child {
+    flex: 0 0 auto;
     color: #8ea2bb;
     font-size: 11px;
     font-weight: 650;
+}
+
+.party-page .party-challenge-category summary span:first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .party-page .party-challenge-group-action {
@@ -1478,6 +1535,7 @@ button {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 3px 14px;
+    min-width: 0;
 }
 
 .party-page .party-check {
@@ -1487,9 +1545,11 @@ button {
     color: #d3deef;
     font-size: 12px;
     line-height: 1.45;
+    overflow-wrap: anywhere;
 }
 
 .party-page .party-check input {
+    flex: 0 0 auto;
     accent-color: #51bdff;
 }
 
@@ -1932,6 +1992,14 @@ button {
         grid-template-columns: 1fr;
     }
 
+    .party-page .party-imposter-count-field {
+        grid-column: 1 / -1;
+    }
+
+    .party-page .party-settings-divider {
+        margin: 15px 0 12px;
+    }
+
     .party-page .party-chat-dock {
         right: 14px;
         bottom: 14px;
@@ -1940,10 +2008,6 @@ button {
     .party-page .party-chat {
         max-height: min(520px, calc(100vh - 96px));
         padding: 15px;
-    }
-
-    .party-page .party-settings-grid .party-field:nth-child(3):last-child {
-        grid-column: auto;
     }
 
     .party-page .party-header h1 {
