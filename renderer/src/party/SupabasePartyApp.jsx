@@ -202,7 +202,7 @@ function PartyApp() {
     const [settings, setSettings] = useState(emptySettings);
     const [challengeSearch, setChallengeSearch] = useState("");
     const [chatDraft, setChatDraft] = useState("");
-    const [chatOpen, setChatOpen] = useState(true);
+    const [chatOpen, setChatOpen] = useState(false);
     const [message, setMessage] = useState("");
     const [busy, setBusy] = useState(false);
 
@@ -223,6 +223,12 @@ function PartyApp() {
             options: matches.filter((option) => option.category === category)
         }));
     }, [challengeSearch]);
+
+    useEffect(() => {
+        if (room?.phase === "playing") {
+            setChatOpen(false);
+        }
+    }, [room?.phase]);
 
     function applyState(value) {
         setRoom(value.room);
@@ -802,7 +808,7 @@ function PartyApp() {
                                                                                     : settings.enabledChallenges.filter((id) => id !== option.id)
                                                                             })}
                                                                         />
-                                                                        {option.label}
+                                                                        <span>{option.label}</span>
                                                                     </label>
                                                                 ))}
                                                             </div>

@@ -921,6 +921,7 @@ button {
 
 .party-page {
     min-height: 100vh;
+    overflow-x: clip;
     color: #f5f8ff;
     background:
         radial-gradient(ellipse at 50% 3%, rgba(32, 99, 183, 0.26), transparent 48%),
@@ -1545,6 +1546,11 @@ button {
     color: #d3deef;
     font-size: 12px;
     line-height: 1.45;
+}
+
+.party-page .party-challenge-grid .party-check > span {
+    flex: 1 1 auto;
+    min-width: 0;
     overflow-wrap: anywhere;
 }
 
