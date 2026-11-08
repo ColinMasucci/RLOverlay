@@ -69,17 +69,19 @@ updates. The existing Electron game continues to use the Node WebSocket service
 3. Run [`supabase/migrations/20261107010000_restore_lobby_rpc_permissions.sql`](./supabase/migrations/20261107010000_restore_lobby_rpc_permissions.sql)
    to ensure the public game client can execute the ready, end-voting, and
    next-round functions.
-4. In Vercel, import this repository and set **Root Directory** to the
+4. Run [`supabase/migrations/20261108000000_weighted_imposter_ranges_and_challenges.sql`](./supabase/migrations/20261108000000_weighted_imposter_ranges_and_challenges.sql)
+   to add weighted random imposter ranges and the expanded challenge list.
+5. In Vercel, import this repository and set **Root Directory** to the
    repository root (`.`), not `renderer`. The Vite configuration builds the
    website to `dist`; use `npm run build` as the build command and `dist` as
    the output directory.
-5. Add these Vercel environment variables for the Production, Preview, and
+6. Add these Vercel environment variables for the Production, Preview, and
    Development environments, then redeploy:
    - `VITE_SUPABASE_URL`: the project URL from Supabase.
    - `VITE_SUPABASE_PUBLISHABLE_KEY`: the project's publishable (or legacy
      anon) key. This key is public in a browser build; never use the
      `service_role` key here.
-6. For local browser development, copy `.env.example` to `.env.local`, fill in
+7. For local browser development, copy `.env.example` to `.env.local`, fill in
    the same two values, then run `npm run dev`.
 
 The website uses anonymous lobby sessions rather than Supabase user accounts.

@@ -1385,6 +1385,29 @@ button {
     grid-column: 1 / -1;
 }
 
+.party-page .party-imposter-count-field > .party-toggle {
+    margin-top: 10px;
+}
+
+.party-page .party-imposter-range {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+    margin-top: 8px;
+}
+
+.party-page .party-imposter-range .party-field {
+    min-width: 0;
+}
+
+.party-page .party-range-note {
+    display: block;
+    margin-top: 7px;
+    color: #8fa1b8;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
 .party-page .party-challenge-options {
     min-width: 0;
     margin: 15px 0;
@@ -1398,6 +1421,57 @@ button {
     color: #aabbd2;
     font-size: 11px;
     font-weight: 800;
+}
+
+.party-page .party-challenge-search {
+    margin: 4px 0 12px;
+}
+
+.party-page .party-challenge-groups {
+    display: grid;
+    gap: 7px;
+}
+
+.party-page .party-challenge-category {
+    min-width: 0;
+    padding: 9px 11px;
+    border: 1px solid #2e4057;
+    border-radius: 9px;
+    background: rgba(8, 15, 25, 0.38);
+}
+
+.party-page .party-challenge-category summary {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    color: #e7eef9;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    list-style-position: inside;
+}
+
+.party-page .party-challenge-category summary span:last-child {
+    color: #8ea2bb;
+    font-size: 11px;
+    font-weight: 650;
+}
+
+.party-page .party-challenge-group-action {
+    margin: 9px 0 3px;
+    padding: 5px 8px;
+    color: #90d9ff;
+    border: 1px solid rgba(81, 189, 255, 0.3);
+    border-radius: 6px;
+    background: rgba(37, 113, 161, 0.13);
+    font-size: 11px;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.party-page .party-challenge-group-action:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .party-page .party-challenge-grid {
@@ -1602,6 +1676,7 @@ button {
 }
 
 .party-page .party-vote-option {
+    position: relative;
     min-height: 68px;
     gap: 14px;
     padding: 14px 18px;
@@ -1634,11 +1709,14 @@ button {
 }
 
 .party-page .party-vote-option input {
-    width: 20px;
-    height: 20px;
-    flex: 0 0 auto;
-    margin: 0;
-    accent-color: #35bdff;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    clip-path: inset(50%);
 }
 
 .party-page .party-vote-option.is-disabled {

@@ -5,6 +5,9 @@ import { supabase } from "./supabase.js";
 const SESSION_KEY = "rloverlay-imposter-supabase-session";
 const emptySettings = {
     imposterCount: 1,
+    imposterMinCount: 1,
+    imposterMaxCount: 1,
+    randomImposterCount: false,
     challengeAssignment: "random",
     enabledChallenges: challengeOptions.map(({ id }) => id),
     gameMode: "challenge",
@@ -197,6 +200,7 @@ function PartyApp() {
     const [results, setResults] = useState(null);
     const [selectedSuspects, setSelectedSuspects] = useState([]);
     const [settings, setSettings] = useState(emptySettings);
+    const [challengeSearch, setChallengeSearch] = useState("");
     const [chatDraft, setChatDraft] = useState("");
     const [chatOpen, setChatOpen] = useState(true);
     const [message, setMessage] = useState("");
@@ -207,6 +211,18 @@ function PartyApp() {
         challengeOptions.find((option) => option.id === challenge)?.label ?? challenge,
     [challenge]);
     const messages = room?.messages ?? [];
+    const maxSafeImposterCount = Math.max(1, room ? room.players.length - 1 : 1);
+    const visibleChallengeGroups = useMemo(() => {
+        const search = challengeSearch.trim().toLowerCase();
+        const matches = challengeOptions.filter((option) =>
+            option.label.toLowerCase().includes(search) ||
+            option.category.toLowerCase().includes(search)
+        );
+        return [...new Set(matches.map(({ category }) => category))].map((category) => ({
+            category,
+            options: matches.filter((option) => option.category === category)
+        }));
+    }, [challengeSearch]);
 
     function applyState(value) {
         setRoom(value.room);
@@ -216,7 +232,12 @@ function PartyApp() {
         setSpeedHint(value.speedHint);
         setRoleHidden(value.roleHidden === true);
         setResults(value.results);
-        setSettings(value.room.settings);
+        setSettings({
+            ...value.room.settings,
+            imposterMinCount: value.room.settings.imposterMinCount ?? value.room.settings.imposterCount,
+            imposterMaxCount: value.room.settings.imposterMaxCount ?? value.room.settings.imposterCount,
+            randomImposterCount: value.room.settings.randomImposterCount === true
+        });
         setCode(value.room.code);
     }
 
@@ -383,7 +404,11 @@ function PartyApp() {
     async function updateSettings(next) {
         await callRpc("imposter_update_settings", {
             p_token: session.token,
-            p_imposter_count: next.imposterCount,
+            p_imposter_min_count: next.randomImposterCount
+                ? Number(next.imposterMinCount)
+                : Number(next.imposterMaxCount),
+            p_imposter_max_count: Number(next.imposterMaxCount),
+            p_random_imposter_count: next.randomImposterCount,
             p_challenge_assignment: next.challengeAssignment,
             p_enabled_challenges: next.enabledChallenges,
             p_game_mode: next.gameMode,
@@ -615,20 +640,81 @@ function PartyApp() {
                                                 <option value="speed">Speed target</option>
                                             </select>
                                         </label>
-                                        <label className="party-field">
+                                        <div className="party-field party-imposter-count-field">
                                             <span>Number of imposters</span>
-                                            <select
-                                                value={settings.imposterCount}
-                                                onChange={(event) => updateSettings({
-                                                    ...settings,
-                                                    imposterCount: Number(event.target.value)
-                                                })}
+                                            {settings.randomImposterCount ? (
+                                                <div className="party-imposter-range">
+                                                    <label className="party-field">
+                                                        <span>Minimum</span>
+                                                        <select
+                                                            value={settings.imposterMinCount}
+                                                            onChange={(event) => {
+                                                                const minCount = Number(event.target.value);
+                                                                updateSettings({
+                                                                    ...settings,
+                                                                    imposterMinCount: minCount,
+                                                                    imposterMaxCount: Math.max(minCount, settings.imposterMaxCount)
+                                                                });
+                                                            }}
+                                                            disabled={busy}
+                                                        >
+                                                            {Array.from({ length: Math.min(settings.imposterMaxCount, maxSafeImposterCount) }, (_, index) => index + 1)
+                                                                .map((count) => <option value={count} key={count}>{count}</option>)}
+                                                        </select>
+                                                    </label>
+                                                    <label className="party-field">
+                                                        <span>Maximum</span>
+                                                        <select
+                                                            value={settings.imposterMaxCount}
+                                                            onChange={(event) => {
+                                                                const maxCount = Number(event.target.value);
+                                                                updateSettings({
+                                                                    ...settings,
+                                                                    imposterMinCount: Math.min(settings.imposterMinCount, maxCount),
+                                                                    imposterMaxCount: maxCount
+                                                                });
+                                                            }}
+                                                            disabled={busy}
+                                                        >
+                                                            {Array.from({ length: maxSafeImposterCount - settings.imposterMinCount + 1 }, (_, index) => index + settings.imposterMinCount)
+                                                                .map((count) => <option value={count} key={count}>{count}</option>)}
+                                                        </select>
+                                                    </label>
+                                                </div>
+                                            ) : (
+                                                <select
+                                                    value={settings.imposterMaxCount}
+                                                    onChange={(event) => {
+                                                        const count = Number(event.target.value);
+                                                        updateSettings({
+                                                            ...settings,
+                                                            imposterMinCount: count,
+                                                            imposterMaxCount: count
+                                                        });
+                                                    }}
+                                                    disabled={busy}
+                                                >
+                                                    {Array.from({ length: maxSafeImposterCount }, (_, index) => index + 1)
+                                                        .map((count) => <option value={count} key={count}>{count}</option>)}
+                                                </select>
+                                            )}
+                                            <ToggleSetting
+                                                checked={settings.randomImposterCount}
                                                 disabled={busy}
+                                                onChange={(checked) => updateSettings({
+                                                    ...settings,
+                                                    randomImposterCount: checked,
+                                                    imposterMinCount: checked
+                                                        ? Math.min(settings.imposterMinCount, settings.imposterMaxCount)
+                                                        : settings.imposterMaxCount
+                                                })}
                                             >
-                                                {Array.from({ length: room.players.length }, (_, index) => index + 1)
-                                                    .map((count) => <option value={count} key={count}>{count}</option>)}
-                                            </select>
-                                        </label>
+                                                Randomize within range
+                                            </ToggleSetting>
+                                            {settings.randomImposterCount && (
+                                                <small className="party-range-note">Lower counts are more likely. At least one safe player is always kept.</small>
+                                            )}
+                                        </div>
                                         {settings.gameMode === "challenge" && (
                                             <label className="party-field">
                                                 <span>Challenge assignment</span>
@@ -649,24 +735,70 @@ function PartyApp() {
 
                                     {settings.gameMode === "challenge" ? (
                                         <fieldset className="party-challenge-options">
-                                            <legend>Challenges in this round</legend>
-                                            <div className="party-challenge-grid">
-                                                {challengeOptions.map((option) => (
-                                                    <label className="party-check" key={option.id}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={settings.enabledChallenges.includes(option.id)}
-                                                            disabled={busy}
-                                                            onChange={(event) => updateSettings({
-                                                                ...settings,
-                                                                enabledChallenges: event.target.checked
-                                                                    ? [...settings.enabledChallenges, option.id]
-                                                                    : settings.enabledChallenges.filter((id) => id !== option.id)
-                                                            })}
-                                                        />
-                                                        {option.label}
-                                                    </label>
-                                                ))}
+                                            <legend>Choose challenges · {settings.enabledChallenges.length} selected</legend>
+                                            <label className="party-field party-challenge-search">
+                                                <span>Find a challenge</span>
+                                                <input
+                                                    type="search"
+                                                    value={challengeSearch}
+                                                    onChange={(event) => setChallengeSearch(event.target.value)}
+                                                    placeholder="Search challenges"
+                                                    disabled={busy}
+                                                />
+                                            </label>
+                                            <div className="party-challenge-groups">
+                                                {visibleChallengeGroups.map(({ category, options }) => {
+                                                    const selectedCount = options.filter(({ id }) =>
+                                                        settings.enabledChallenges.includes(id)
+                                                    ).length;
+                                                    const allSelected = selectedCount === options.length;
+                                                    return (
+                                                        <details className="party-challenge-category" key={category} open={Boolean(challengeSearch)}>
+                                                            <summary>
+                                                                <span>{category}</span>
+                                                                <span>{selectedCount}/{options.length}</span>
+                                                            </summary>
+                                                            <button
+                                                                className="party-challenge-group-action"
+                                                                type="button"
+                                                                disabled={busy || (allSelected &&
+                                                                    selectedCount === settings.enabledChallenges.length)}
+                                                                onClick={() => updateSettings({
+                                                                    ...settings,
+                                                                    enabledChallenges: allSelected
+                                                                        ? settings.enabledChallenges.filter((id) =>
+                                                                            !options.some((option) => option.id === id)
+                                                                        )
+                                                                        : [...new Set([
+                                                                            ...settings.enabledChallenges,
+                                                                            ...options.map(({ id }) => id)
+                                                                        ])]
+                                                                })}
+                                                            >
+                                                                {allSelected ? "Clear category" : "Select category"}
+                                                            </button>
+                                                            <div className="party-challenge-grid">
+                                                                {options.map((option) => (
+                                                                    <label className="party-check" key={option.id}>
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={settings.enabledChallenges.includes(option.id)}
+                                                                            disabled={busy || (settings.enabledChallenges.length === 1 &&
+                                                                                settings.enabledChallenges.includes(option.id))}
+                                                                            onChange={(event) => updateSettings({
+                                                                                ...settings,
+                                                                                enabledChallenges: event.target.checked
+                                                                                    ? [...settings.enabledChallenges, option.id]
+                                                                                    : settings.enabledChallenges.filter((id) => id !== option.id)
+                                                                            })}
+                                                                        />
+                                                                        {option.label}
+                                                                    </label>
+                                                                ))}
+                                                            </div>
+                                                        </details>
+                                                    );
+                                                })}
                                             </div>
                                         </fieldset>
                                     ) : (

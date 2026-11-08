@@ -4,10 +4,43 @@ Heatmap sometimes doesnt have the defensive end towards the bottom. This is beca
 
 Add percentages for the amount of touches made in each third of the field.
 
-Continue with Imposter Game.
-    Add picture of rocketLeague car to main page
-    Edit format so its less like html page. Center things
-    LobbyCode within textbar is cut off
+Add tasks to imposter game:
+    touch the ceiling 5 seperate times.
+    get 3 assists
+    steal teammates boost 4 times
+    clear the ball back to your defending side 3 times
+    Get 2 seperate turtle plays on the ball
+    Go absolutely crazy when your teammates score a goal, no matter how simple.
+    Get a teammate to believe in an insane lie 
+    Receive 5 compliments this game. 
+    pretend and convince your teammates you are lagging.
+    Get someone to accuse you of being the imposter, then successfully convince them otherwise.
+    Get everyone on board with a new kickoff strategy
+    Get the least amount of points on the leaderboard
+    play the whole game off ball cam
+    play the last minute with your controller upside down
+    Get a flipreset off of your own teammate
+    Get into a Rule 1
+    whiff the ball 3 times
+    go afk for 20 seconds
+    Pickup the same big boost 3 times without moving
+    Drive exclusively in reverse for 30 seconds
+    Try to stay above 50 boost the entire game
+    Hit the crossbar/post 2 seperate times
+    Get 3 pinches (ground, ceiling, teammate, kuxir)
+    Get the least amount of touches on the ball
+    Collect the most amount of boost
+    Get the most amount of bumps
+    Get someone on the other team to respond to you
+    Get the most amount of shots but least amount of goals
+    Do a full lap around the field on the wall without touching ground or ball
+    Dont let any teammate touch te ball for 30 seconds
+    Have the match go to overtime
+    lose the game
+    Get demoed yourself 3 times
+    ALways be the last to touch ball after kickoff on your team
+    Never stay fully grounded for more than 10 seconds in a row
+
 
 Make feature where you can reoprt players with message and theyll pop up before games.
 
