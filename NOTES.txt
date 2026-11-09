@@ -8,6 +8,6 @@ Add default settings that are first set on install. Then add revert to defaults 
 
 Reword button mapping labels so they make more sense.
 
-Get more stats from the RL tracker website.
+Get more stats from the RL tracker website. 
 
 Clean readme me so it is just install instructions, how to run locally, and then helpful settings navigation.
