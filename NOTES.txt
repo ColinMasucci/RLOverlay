@@ -10,6 +10,4 @@ Reword button mapping labels so they make more sense.
 
 Get more stats from the RL tracker website.
 
-add settings keybind for controller.
-
 Clean readme me so it is just install instructions, how to run locally, and then helpful settings navigation.
