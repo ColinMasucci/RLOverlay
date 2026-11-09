@@ -44,6 +44,7 @@
       "preload.js",
       "match-events.js",
       "match-history.js",
+      "stats-api-config.js",
       "dist/**/*",
       "node_modules/**/*",
       "package.json"

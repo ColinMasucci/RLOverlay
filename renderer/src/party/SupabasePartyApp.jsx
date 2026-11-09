@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import challengeOptions from "../../../shared/imposter-challenges.json";
 import { supabase } from "./supabase.js";
+import { getRoleCardContent } from "./role-card-content.mjs";
 
 const SESSION_KEY = "rloverlay-imposter-supabase-session";
 const emptySettings = {
@@ -155,30 +156,19 @@ function RoleCard({ role, settings, challengeLabel, speedTarget, speedHint, role
         };
     }, [challengeLabel, challengeCycle.join("|"), role, roleHidden, settings.gameMode]);
 
-    const appearsSafe = role !== "imposter" || roleHidden;
-    let task;
-    if (settings.gameMode === "speed") {
-        if (role === "imposter" && !roleHidden) {
-            task = "Blend in and work out the safe players’ target speed.";
-            if (speedHint) {
-                task += ` Hint: the shared target is between ${speedHint.min} and ${speedHint.max} ${settings.speedUnit.toUpperCase()}.`;
-            }
-        } else {
-            task = `Try to score a goal at ${speedTarget} ${settings.speedUnit.toUpperCase()}. Let your team know how it went.`;
-            if (role === "imposter" && speedHint) {
-                task += ` Hint: the shared target is between ${speedHint.min} and ${speedHint.max} ${settings.speedUnit.toUpperCase()}.`;
-            }
-        }
-    } else if (role === "imposter") {
-        task = `Your task: ${displayChallenge}.`;
-    } else {
-        task = "There is an imposter among you. Guess who they are and their task.";
-    }
+    const { label, task, isSafe } = getRoleCardContent({
+        role,
+        settings,
+        challengeLabel: displayChallenge,
+        speedTarget,
+        speedHint,
+        roleHidden
+    });
 
     return (
-        <div className={`party-role-card ${appearsSafe ? "is-safe" : "is-imposter"}`}>
+        <div className={`party-role-card ${isSafe ? "is-safe" : "is-imposter"}`}>
             <div className="party-role-inset">
-                <span className="party-role-label">{appearsSafe ? "SAFE" : "IMPOSTER"}</span>
+                <span className="party-role-label">{label}</span>
                 <p className={isRevealing ? "is-revealing" : ""} aria-live={isRevealing ? "off" : "polite"}>
                     {task}
                 </p>
@@ -187,7 +177,7 @@ function RoleCard({ role, settings, challengeLabel, speedTarget, speedHint, role
     );
 }
 
-function PartyApp() {
+function PartyApp({ initialName = "" }) {
     const [session, setSession] = useState(null);
     const [name, setName] = useState("");
     const [code, setCode] = useState("");
@@ -205,6 +195,9 @@ function PartyApp() {
     const [chatOpen, setChatOpen] = useState(false);
     const [message, setMessage] = useState("");
     const [busy, setBusy] = useState(false);
+    const matchEndRequestedRef = useRef(false);
+    const [readyForNextRound, setReadyForNextRound] = useState(false);
+    const autoReadyInFlightRef = useRef(false);
 
     const self = room?.players.find((player) => player.id === session?.playerId);
     const challengeLabel = useMemo(() =>
@@ -230,6 +223,12 @@ function PartyApp() {
         }
     }, [room?.phase]);
 
+    useEffect(() => {
+        if (initialName.trim()) {
+            setName((current) => current.trim() ? current : initialName);
+        }
+    }, [initialName]);
+
     function applyState(value) {
         setRoom(value.room);
         setRole(value.role);
@@ -246,6 +245,93 @@ function PartyApp() {
         });
         setCode(value.room.code);
     }
+
+    useEffect(() => {
+        const publishCard = window.rocketLeague?.publishImposterOverlay;
+        if (!publishCard || !room || room.settingsLocked !== true) {
+            publishCard?.(null);
+            return undefined;
+        }
+
+        const card = ["playing", "voting"].includes(room.phase) && role
+            ? getRoleCardContent({
+                role,
+                settings: room.settings,
+                challengeLabel,
+                speedTarget,
+                speedHint,
+                roleHidden
+            })
+            : null;
+        publishCard({
+            phase: room.phase,
+            roundNumber: room.roundNumber,
+            card,
+            players: room.players.map((player) => ({
+                id: player.id,
+                name: player.name,
+                ready: player.ready === true,
+                voted: player.voted === true,
+                isHost: player.isHost === true
+            })),
+            selfId: session?.playerId,
+            isHost: self?.isHost === true,
+            hasVoted: self?.voted === true,
+            voteCount: room.players.filter((player) => player.voted).length,
+            imposterCount: room.settings.imposterCount,
+            speedUnit: room.settings.speedUnit,
+            results: room.phase === "results" ? results : null,
+            readyForNextRound,
+            chatEnabled: room.settings.chatEnabled === true,
+            messages: (room.messages ?? []).map((item) => ({
+                id: item.id,
+                roleLabel: item.roleLabel,
+                content: item.content
+            })),
+            message
+        });
+    }, [room, role, challengeLabel, speedTarget, speedHint, roleHidden, results, session?.playerId, self, message, readyForNextRound]);
+
+    useEffect(() => {
+        if (!session?.token || room?.phase !== "playing") {
+            matchEndRequestedRef.current = false;
+            return undefined;
+        }
+        return window.rocketLeague?.onImposterMatchEnded?.(() => {
+            if (matchEndRequestedRef.current) {
+                return;
+            }
+            matchEndRequestedRef.current = true;
+            void callRpc("imposter_match_ended", { p_token: session.token }).then((response) => {
+                if (!response) {
+                    matchEndRequestedRef.current = false;
+                }
+            });
+        });
+    }, [session?.token, room?.phase]);
+
+    useEffect(() => {
+        if (room?.phase !== "lobby" || !readyForNextRound) {
+            return;
+        }
+        if (self?.ready) {
+            setReadyForNextRound(false);
+            return;
+        }
+        if (autoReadyInFlightRef.current) {
+            return;
+        }
+
+        autoReadyInFlightRef.current = true;
+        void readyUp().then((response) => {
+            setReadyForNextRound(false);
+            if (!response?.room) {
+                autoReadyInFlightRef.current = false;
+            }
+        }).finally(() => {
+            autoReadyInFlightRef.current = false;
+        });
+    }, [room?.phase, room?.players, self?.ready, readyForNextRound]);
 
     async function refresh(token = session?.token) {
         if (!supabase || !token) {
@@ -440,6 +526,72 @@ function PartyApp() {
         await callRpc("imposter_leave", { p_token: session.token }, { keepSession: false });
     }
 
+    useEffect(() => {
+        return window.rocketLeague?.onImposterOverlayAction?.((action) => {
+            if (!session?.token || !room) {
+                return;
+            }
+            switch (action.type) {
+                case "start-voting":
+                    if (self?.isHost && room.phase === "playing") {
+                        void callRpc("imposter_match_ended", { p_token: session.token });
+                    }
+                    break;
+                case "end-voting":
+                    if (self?.isHost && room.phase === "voting") {
+                        void callRpc("imposter_end_voting", { p_token: session.token });
+                    }
+                    break;
+                case "vote":
+                    if (room.phase === "voting" && !self?.voted) {
+                        void callRpc("imposter_vote", {
+                            p_token: session.token,
+                            p_suspects: action.suspects
+                        });
+                    }
+                    break;
+                case "next-round":
+                    if (self?.isHost && room.phase === "results") {
+                        void callRpc("imposter_next_round", { p_token: session.token });
+                    }
+                    break;
+                case "ready-next-round":
+                    if (room.phase === "results") {
+                        setReadyForNextRound(true);
+                        if (self?.isHost) {
+                            void callRpc("imposter_next_round", {
+                                p_token: session.token
+                            }).then((response) => {
+                                if (!response) {
+                                    setReadyForNextRound(false);
+                                }
+                            });
+                        }
+                    }
+                    break;
+                case "ready":
+                    if (room.phase === "lobby" && !self?.ready) {
+                        void readyUp();
+                    }
+                    break;
+                case "send-chat":
+                    if (room.settings.chatEnabled &&
+                        ["playing", "voting"].includes(room.phase)) {
+                        void callRpc("imposter_send_message", {
+                            p_token: session.token,
+                            p_content: action.content
+                        });
+                    }
+                    break;
+                case "leave":
+                    void leaveLobby();
+                    break;
+                default:
+                    break;
+            }
+        });
+    }, [session?.token, room, self]);
+
     async function copyLobbyCode() {
         try {
             await navigator.clipboard.writeText(room.code);
@@ -490,10 +642,10 @@ function PartyApp() {
             <main className="party-app party-shell">
                 <h1>RL Imposter game</h1>
                 <p className="party-message">
-                    This website is not connected to Supabase yet. Add
+                    This build is not connected to Supabase yet. Set
                     <code> VITE_SUPABASE_URL </code> and
                     <code> VITE_SUPABASE_PUBLISHABLE_KEY </code> to the local
-                    <code> .env.local </code> file, then restart the dev server.
+                    <code> .env.local </code> file, then rebuild the app.
                 </p>
             </main>
         );
@@ -1087,4 +1239,6 @@ function PartyApp() {
     );
 }
 
-export default PartyApp;
+export default function SupabasePartyApp({ initialName = "" }) {
+    return <PartyApp initialName={initialName} />;
+}

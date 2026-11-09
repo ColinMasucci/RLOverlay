@@ -33,7 +33,8 @@ module.exports = defineConfig({
                 overlay: path.join(__dirname, "renderer", "overlay.html"),
                 settings: path.join(__dirname, "renderer", "settings.html"),
                 status: path.join(__dirname, "renderer", "status.html"),
-                party: path.join(__dirname, "renderer", "party.html")
+                party: path.join(__dirname, "renderer", "party.html"),
+                "imposter-overlay": path.join(__dirname, "renderer", "imposter-overlay.html")
             }
         }
     }

@@ -5,13 +5,17 @@ const path = require("path");
 const WebSocket = require("ws");
 const matchHistory = require("./match-history");
 const matchEvents = require("./match-events");
+const statsApiConfig = require("./stats-api-config");
 
 let overlayWindow;
 let statusWindow;
 let settingsWindow;
 let trackerWindow;
 let imposterWindow;
+let imposterOverlayWindow;
 let imposterSession = null;
+let imposterOverlayCard = null;
+let isShuttingDown = false;
 let rocketLeagueSocket;
 let trackerLookupGeneration = 0;
 let updateDownloaded = false;
@@ -32,6 +36,7 @@ const trackerRankByPlayer = new Map();
 let trackerRankLookupQueue = Promise.resolve();
 let matchEpochNumber = 0;
 const kickoffState = matchEvents.createKickoffState();
+const matchParticipantKeys = new Set();
 const previousBoostByPlayer = new Map();
 const boostCollectedByPlayer = new Map();
 const postHitsByPlayer = new Map();
@@ -66,12 +71,14 @@ const defaultSettings = {
     gamepad: {
         overlayButton: 8,
         toggleConnectionButton: null,
-        toggleHistoryButton: 9
+        toggleHistoryButton: 9,
+        toggleSettingsButton: null
     },
     overlayScale: 1.15,
     positionX: 0,
     positionYOffset: 110,
     trackedPlayerId: null,
+    trackedPlayerAutoSelectDisabled: false,
     showStatusWindow: true,
     showHeatmap: true,
     heatmapMode: "overall",
@@ -106,6 +113,25 @@ function settingsFilePath() {
 
 function matchHistoryFilePath() {
     return path.join(app.getPath("userData"), "match-history.json");
+}
+
+function statsApiConfigDirectory() {
+    return path.join(
+        app.getPath("documents"),
+        "My Games",
+        "Rocket League",
+        "TAGame",
+        "Config"
+    );
+}
+
+function loadStatsApiConfig() {
+    try {
+        return statsApiConfig.ensureStatsApiConfig(statsApiConfigDirectory());
+    } catch (error) {
+        console.error("Could not initialize Rocket League Stats API config:", error.message);
+        return { error: error.message };
+    }
 }
 
 function loadMatchHistory() {
@@ -191,6 +217,7 @@ function sendMatchHistoryUpdated(force = false) {
         ),
         totalMatches: savedMatches.length,
         playerOptions,
+        suggestedPlayerId: matchHistory.suggestTrackedPlayerId(savedMatches),
         trackedPlayerId: settings.trackedPlayerId,
         error: matchHistoryError
     };
@@ -208,7 +235,20 @@ function archiveCurrentMatch(matchId, finalPlayers = players) {
         return false;
     }
 
-    const record = matchHistory.createMatchRecord(normalizedId, finalPlayers, undefined, kickoffDuels);
+    const matchParticipants = (finalPlayers ?? []).filter((player) =>
+        matchParticipantKeys.has(getRosterPlayerKey({
+            TeamNum: player.team,
+            Shortcut: player.shortcut,
+            PrimaryId: player.id,
+            Name: player.name
+        }))
+    );
+    const record = matchHistory.createMatchRecord(
+        normalizedId,
+        matchParticipants,
+        undefined,
+        kickoffDuels
+    );
     if (!record) {
         return false;
     }
@@ -268,16 +308,19 @@ function validateSettings(value) {
             ? null
             : defaultSettings.gamepad.toggleHistoryButton;
     }
+    const toggleSettingsButton = value.gamepad.toggleSettingsButton ?? null;
     if (!validButton(value.gamepad.overlayButton) ||
         !validButton(value.gamepad.toggleConnectionButton) ||
-        !validButton(toggleHistoryButton)) {
+        !validButton(toggleHistoryButton) ||
+        !validButton(toggleSettingsButton)) {
         throw new Error("Controller button numbers must be between 0 and 31.");
     }
 
     const assignedButtons = [
         value.gamepad.overlayButton,
         value.gamepad.toggleConnectionButton,
-        toggleHistoryButton
+        toggleHistoryButton,
+        toggleSettingsButton
     ].filter((button) => button !== null);
     if (new Set(assignedButtons).size !== assignedButtons.length) {
         throw new Error("Each controller action must use a different button.");
@@ -298,6 +341,9 @@ function validateSettings(value) {
     const heatmapMode = value.heatmapMode ?? defaultSettings.heatmapMode;
     const enableRankLookup = value.enableRankLookup ?? defaultSettings.enableRankLookup;
     const trackedPlayerId = value.trackedPlayerId ?? null;
+    const trackedPlayerAutoSelectDisabled =
+        value.trackedPlayerAutoSelectDisabled ??
+        defaultSettings.trackedPlayerAutoSelectDisabled;
     const statVisibility = value.statVisibility ?? defaultSettings.statVisibility;
     if (typeof overlayScale !== "number" || !Number.isFinite(overlayScale) ||
         overlayScale < 0.8 || overlayScale > 1.5) {
@@ -324,6 +370,9 @@ function validateSettings(value) {
         (typeof trackedPlayerId !== "string" || !trackedPlayerId.trim())) {
         throw new Error("Tracked player must be selected from the player list.");
     }
+    if (typeof trackedPlayerAutoSelectDisabled !== "boolean") {
+        throw new Error("Automatic player selection must be enabled or disabled.");
+    }
     if (!statVisibility || typeof statVisibility !== "object" ||
         statKeys.some((key) => typeof (statVisibility[key] ?? true) !== "boolean")) {
         throw new Error("Each stat visibility option must be enabled or disabled.");
@@ -339,12 +388,14 @@ function validateSettings(value) {
         gamepad: {
             overlayButton: value.gamepad.overlayButton,
             toggleConnectionButton: value.gamepad.toggleConnectionButton,
-            toggleHistoryButton
+            toggleHistoryButton,
+            toggleSettingsButton
         },
         overlayScale,
         positionX,
         positionYOffset,
         trackedPlayerId,
+        trackedPlayerAutoSelectDisabled,
         showStatusWindow,
         showHeatmap,
         heatmapMode,
@@ -448,25 +499,6 @@ function getPlayerStatKey(player) {
         });
 }
 
-function getHasFlip(player) {
-    const value = player.bHasFlip ?? player.HasFlip ?? player.hasFlip;
-    return typeof value === "boolean" ? value : undefined;
-}
-
-function isAerialHit(motion) {
-    if (motion?.onGround !== false || motion.onWall !== false) {
-        return false;
-    }
-    if (motion.hasFlip === false) {
-        return true;
-    }
-
-    // The Stats API does not expose flip availability; use the standard ground-jump dodge window as a fallback.
-    return motion.hasFlip === undefined &&
-        Number.isFinite(motion.airborneSince) &&
-        Date.now() - motion.airborneSince >= 1250;
-}
-
 function getRosterPlayerKey(player) {
     const primaryId = typeof player.PrimaryId === "string"
         ? player.PrimaryId
@@ -506,6 +538,7 @@ function resetMatchStats(matchGuid) {
     ownGoalsByPlayer.clear();
     kickoffDuels.length = 0;
     playerMotionByKey.clear();
+    matchParticipantKeys.clear();
     latestBallHitByTeam.clear();
     latestBallTouch = null;
     previousTeamGoals = null;
@@ -530,7 +563,7 @@ function sendHeatmapUpdated() {
     }
 }
 
-function recordHeatmapSample(location, player) {
+function recordHeatmapSample(location, player, isTouch = false) {
     if (!currentMatchGuid || !location ||
         !Number.isFinite(location.X) || !Number.isFinite(location.Y) ||
         !player || (player.TeamNum !== 0 && player.TeamNum !== 1)) {
@@ -541,7 +574,8 @@ function recordHeatmapSample(location, player) {
         x: Math.max(-4096, Math.min(4096, location.X)),
         y: Math.max(-5120, Math.min(5120, location.Y)),
         team: player.TeamNum,
-        player: player.Name ?? "Unknown"
+        player: player.Name ?? "Unknown",
+        isTouch
     });
     if (heatmapSamples.length > 3000) {
         heatmapSamples.splice(0, heatmapSamples.length - 3000);
@@ -771,6 +805,78 @@ function createOverlay() {
     });
 }
 
+function createImposterOverlayWindow() {
+    const { workArea } = screen.getPrimaryDisplay();
+    imposterOverlayWindow = new BrowserWindow({
+        width: 420,
+        height: 160,
+        x: workArea.x + 16,
+        y: workArea.y + 16,
+        show: false,
+        frame: false,
+        transparent: true,
+        backgroundColor: "#00000000",
+        alwaysOnTop: true,
+        focusable: true,
+        resizable: false,
+        skipTaskbar: true,
+        hasShadow: false,
+        webPreferences: {
+            preload: path.join(__dirname, "preload.js"),
+            contextIsolation: true,
+            nodeIntegration: false,
+            backgroundThrottling: false
+        }
+    });
+    imposterOverlayWindow.setIgnoreMouseEvents(false);
+    imposterOverlayWindow.setAlwaysOnTop(true, "screen-saver");
+    imposterOverlayWindow.on("closed", () => {
+        imposterOverlayWindow = null;
+    });
+    imposterOverlayWindow.loadFile(path.join(__dirname, "dist", "imposter-overlay.html"));
+    imposterOverlayWindow.webContents.on("did-finish-load", () => {
+        imposterOverlayWindow.webContents.send(
+            "imposter-overlay-card-updated",
+            imposterOverlayCard
+        );
+        if (imposterOverlayCard) {
+            imposterOverlayWindow.showInactive();
+            imposterOverlayWindow.setAlwaysOnTop(true, "screen-saver");
+        }
+    });
+}
+
+function updateImposterOverlayCard(card) {
+    if (card !== null && (!card || !["lobby", "playing", "voting", "results"].includes(card.phase) ||
+        !Array.isArray(card.players) || card.players.length > 12 ||
+        card.players.some((player) => !player || typeof player.id !== "string" ||
+            typeof player.name !== "string" || typeof player.ready !== "boolean") ||
+        (card.card !== null && (!card.card || !["SAFE", "IMPOSTER"].includes(card.card.label) ||
+            typeof card.card.task !== "string" || card.card.task.length > 500 ||
+            typeof card.card.isSafe !== "boolean")) ||
+        typeof card.isHost !== "boolean" ||
+        (card.results !== null && (!card.results || typeof card.results.roles !== "object" ||
+            typeof card.results.tally !== "object")))) {
+        console.error("Ignored an invalid Imposter overlay card update.");
+        return;
+    }
+
+    imposterOverlayCard = card;
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+        settingsWindow.webContents.setBackgroundThrottling(card === null);
+    }
+    if (!imposterOverlayWindow || imposterOverlayWindow.isDestroyed()) {
+        return;
+    }
+    imposterOverlayWindow.webContents.send("imposter-overlay-card-updated", card);
+    if (card) {
+        imposterOverlayWindow.showInactive();
+        imposterOverlayWindow.setAlwaysOnTop(true, "screen-saver");
+    } else {
+        imposterOverlayWindow.hide();
+    }
+}
+
 function createStatusWindow() {
     const { workArea } = screen.getPrimaryDisplay();
 
@@ -837,7 +943,12 @@ function toggleSettingsWindow() {
         }
     });
 
-    settingsWindow.on("close", () => {
+    settingsWindow.on("close", (event) => {
+        if (imposterOverlayCard && !isShuttingDown) {
+            event.preventDefault();
+            settingsWindow.hide();
+            return;
+        }
         gamepadBindingTarget = null;
         heldOverlayButtons.clear();
         setOverlayVisible(false);
@@ -977,7 +1088,8 @@ function saveSettings(nextValue) {
 function startGamepadBinding(target) {
     if (target !== "overlayButton" &&
         target !== "toggleConnectionButton" &&
-        target !== "toggleHistoryButton") {
+        target !== "toggleHistoryButton" &&
+        target !== "toggleSettingsButton") {
         return;
     }
 
@@ -1051,6 +1163,10 @@ function handleGamepadButtonChange(event, data) {
         settings.gamepad.overlayButton !== null &&
         heldOverlayButtons.has(`${data.controllerId}:${settings.gamepad.overlayButton}`)) {
         toggleOverlayView();
+    }
+
+    if (settings.gamepad.toggleSettingsButton === data.button && data.pressed) {
+        toggleSettingsWindow();
     }
 }
 
@@ -1183,6 +1299,7 @@ function connectToRocketLeague() {
             }
 
             if (["MatchEnded", "MatchFinished", "GameEnded"].includes(message.Event)) {
+                updateImposterOverlayCard(null);
                 publishImposterGameStats(data?.Players?.length ? data.Players : players, true);
                 for (const window of [settingsWindow, imposterWindow]) {
                     if (window && !window.isDestroyed()) {
@@ -1214,13 +1331,15 @@ function connectToRocketLeague() {
                     if ((toucher.TeamNum === 0 || toucher.TeamNum === 1) && toucher.Name) {
                         latestBallTouch = toucher;
                         latestBallHitByTeam.set(toucher.TeamNum, toucher);
-                        recordHeatmapSample(data?.Ball?.Location, toucher);
+                        recordHeatmapSample(data?.Ball?.Location, toucher, true);
 
                         const key = getPlayerStatKey(toucher);
-                        const motion = playerMotionByKey.get(key);
-                        if (isAerialHit(motion)) {
-                            aerialHitsByPlayer.set(key, (aerialHitsByPlayer.get(key) ?? 0) + 1);
-                        }
+                        matchEvents.recordAerialHit(
+                            aerialHitsByPlayer,
+                            playerMotionByKey,
+                            key,
+                            toucher
+                        );
                     }
                 }
                 recordKickoffResult(matchEvents.registerKickoffBallHit(
@@ -1320,23 +1439,19 @@ function connectToRocketLeague() {
                     getRosterPlayerKey(player),
                     player
                 ])).values()];
+                for (const player of uniqueMatchPlayers) {
+                    if (matchEvents.isMatchParticipant(player)) {
+                        matchParticipantKeys.add(getRosterPlayerKey(player));
+                    }
+                }
                 const currentPlayerKeys = new Set();
                 const updatedPlayers = uniqueMatchPlayers.map((player) => {
                     const key = getPlayerKey(player);
                     const rosterKey = getRosterPlayerKey(player);
                     currentPlayerKeys.add(rosterKey);
-                    const previousMotion = playerMotionByKey.get(key);
-                    const inAir = player.bOnGround === false && player.bOnWall === false;
-                    playerMotionByKey.set(key, {
-                        onGround: player.bOnGround,
-                        onWall: player.bOnWall,
-                        hasFlip: getHasFlip(player),
-                        airborneSince: inAir
-                            ? previousMotion?.onGround === false &&
-                                previousMotion?.onWall === false
-                                ? previousMotion.airborneSince
-                                : Date.now()
-                            : null
+                    const aerialKey = getPlayerStatKey(player);
+                    playerMotionByKey.set(aerialKey, {
+                        onGround: matchEvents.getGroundState(player)
                     });
                     const boost = player.Boost;
                     const previousBoost = previousBoostByPlayer.get(key);
@@ -1376,7 +1491,7 @@ function connectToRocketLeague() {
                         demos: player.Demos,
                         postHits: postHitsByPlayer.get(key) ?? 0,
                         boostCollected: boostCollectedByPlayer.get(key) ?? 0,
-                        aerialHits: aerialHitsByPlayer.get(key) ?? 0,
+                        aerialHits: aerialHitsByPlayer.get(aerialKey) ?? 0,
                         kickoffWins: kickoffWinsByPlayer.get(key) ?? 0,
                         kickoffAttempts: kickoffAttemptsByPlayer.get(key) ?? 0,
                         ownGoals: ownGoalsByPlayer.get(key) ?? 0,
@@ -1562,6 +1677,7 @@ function toggleOverlay() {
 app.whenReady().then(() => {
     loadSettings();
     loadMatchHistory();
+    loadStatsApiConfig();
     if (!registerKeyboardShortcuts(settings)) {
         console.error("Could not register saved shortcuts; reverting to defaults.");
         settings = structuredClone(defaultSettings);
@@ -1569,12 +1685,56 @@ app.whenReady().then(() => {
     }
 
     createOverlay();
+    createImposterOverlayWindow();
     createStatusWindow();
     initializeAutoUpdater();
     connectToRocketLeague();
 
     ipcMain.on("set-api-connection", (_event, enabled) => {
         setApiConnectionEnabled(enabled === true);
+    });
+
+    ipcMain.on("publish-imposter-overlay-card", (event, card) => {
+        if (!settingsWindow || event.sender.id !== settingsWindow.webContents.id) {
+            return;
+        }
+        updateImposterOverlayCard(card);
+    });
+
+    ipcMain.on("resize-imposter-overlay", (event, height) => {
+        if (!imposterOverlayWindow || event.sender.id !== imposterOverlayWindow.webContents.id ||
+            !Number.isInteger(height)) {
+            return;
+        }
+        const nextHeight = Math.max(130, Math.min(720, height));
+        imposterOverlayWindow.setSize(420, nextHeight);
+    });
+
+    ipcMain.on("imposter-overlay-action", (event, action) => {
+        if (!imposterOverlayWindow || event.sender.id !== imposterOverlayWindow.webContents.id ||
+            !action || typeof action !== "object") {
+            return;
+        }
+        const validAction = [
+            "start-voting",
+            "end-voting",
+            "vote",
+            "ready-next-round",
+            "ready",
+            "send-chat",
+            "leave"
+        ];
+        if (!validAction.includes(action.type) ||
+            (action.type === "vote" && (!Array.isArray(action.suspects) ||
+                action.suspects.length > 11 || action.suspects.some((id) => typeof id !== "string"))) ||
+            (action.type === "send-chat" && (typeof action.content !== "string" ||
+                action.content.length > 500))) {
+            console.error("Ignored an invalid Imposter overlay action.");
+            return;
+        }
+        if (settingsWindow && !settingsWindow.isDestroyed()) {
+            settingsWindow.webContents.send("imposter-overlay-action-request", action);
+        }
     });
 
     ipcMain.on("toggle-settings-window", (event) => {
@@ -1592,6 +1752,7 @@ app.whenReady().then(() => {
             filePath: settingsFilePath(),
             historyFilePath: matchHistoryFilePath(),
             playerOptions: matchHistory.listPlayerOptions(savedMatches, players),
+            suggestedPlayerId: matchHistory.suggestTrackedPlayerId(savedMatches),
             appInfo: {
                 isPackaged: app.isPackaged,
                 version: app.getVersion()
@@ -1604,6 +1765,28 @@ app.whenReady().then(() => {
             throw new Error("Only the settings window can update settings.");
         }
         return saveSettings(value);
+    });
+
+    ipcMain.handle("get-stats-api-config", (event) => {
+        if (!settingsWindow || event.sender.id !== settingsWindow.webContents.id) {
+            throw new Error("Rocket League API settings are only available to Settings.");
+        }
+        return loadStatsApiConfig();
+    });
+
+    ipcMain.handle("set-stats-api-packet-rate", (event, rate) => {
+        if (!settingsWindow || event.sender.id !== settingsWindow.webContents.id) {
+            throw new Error("Only the Settings window can update the Rocket League API rate.");
+        }
+        try {
+            return {
+                ok: true,
+                ...statsApiConfig.setStatsApiPacketRate(statsApiConfigDirectory(), rate)
+            };
+        } catch (error) {
+            console.error("Could not update Rocket League Stats API config:", error.message);
+            return { ok: false, error: error.message };
+        }
     });
 
     ipcMain.handle("get-imposter-session", (event) => {
@@ -1705,6 +1888,7 @@ app.whenReady().then(() => {
 });
 
 app.on("will-quit", () => {
+    isShuttingDown = true;
     globalShortcut.unregisterAll();
 
     if (rocketLeagueSocket) {

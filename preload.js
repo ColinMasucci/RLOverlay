@@ -79,6 +79,12 @@ contextBridge.exposeInMainWorld("rocketLeague", {
     saveSettings(settings) {
         return ipcRenderer.invoke("save-settings", settings);
     },
+    getStatsApiConfig() {
+        return ipcRenderer.invoke("get-stats-api-config");
+    },
+    setStatsApiPacketRate(rate) {
+        return ipcRenderer.invoke("set-stats-api-packet-rate", rate);
+    },
     checkForUpdates() {
         return ipcRenderer.invoke("check-for-updates");
     },
@@ -155,5 +161,24 @@ contextBridge.exposeInMainWorld("rocketLeague", {
         const listener = (_event, stats) => callback(stats);
         ipcRenderer.on("imposter-game-stats", listener);
         return () => ipcRenderer.removeListener("imposter-game-stats", listener);
+    },
+    publishImposterOverlay(card) {
+        ipcRenderer.send("publish-imposter-overlay-card", card);
+    },
+    sendImposterOverlayAction(action) {
+        ipcRenderer.send("imposter-overlay-action", action);
+    },
+    resizeImposterOverlay(height) {
+        ipcRenderer.send("resize-imposter-overlay", height);
+    },
+    onImposterOverlayAction(callback) {
+        const listener = (_event, action) => callback(action);
+        ipcRenderer.on("imposter-overlay-action-request", listener);
+        return () => ipcRenderer.removeListener("imposter-overlay-action-request", listener);
+    },
+    onImposterOverlayCardUpdated(callback) {
+        const listener = (_event, card) => callback(card);
+        ipcRenderer.on("imposter-overlay-card-updated", listener);
+        return () => ipcRenderer.removeListener("imposter-overlay-card-updated", listener);
     }
 });

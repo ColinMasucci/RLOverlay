@@ -32,7 +32,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify Supabase client configuration
+        shell: pwsh
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:VITE_SUPABASE_URL) -or
+              [string]::IsNullOrWhiteSpace($env:VITE_SUPABASE_PUBLISHABLE_KEY)) {
+            throw "Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in the repository's Actions variables before publishing a desktop release."
+          }
+
       - name: Build Windows installer
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
         run: npm run dist:win
 
       - name: Publish GitHub release

@@ -9,10 +9,9 @@ const statColumns = [
     ["shots", "Shots"],
     ["demos", "Demos"],
     ["touches", "Ball touches"],
-    ["carTouches", "Car touches"],
+    ["carTouches", "Bumps"],
     ["postHits", "Post hits"],
     ["boostCollected", "Boost collected"],
-    ["aerialHits", "Aerial hits"],
     ["kickoffWins", "Kickoff wins"],
     ["ownGoals", "Own goals"]
 ];

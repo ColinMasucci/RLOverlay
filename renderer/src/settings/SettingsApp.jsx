@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
-import PartyApp from "../party/PartyApp.jsx";
+import SupabasePartyApp from "../party/SupabasePartyApp.jsx";
 
 const statOptions = [
     ["score", "Score"], ["goals", "Goals"], ["assists", "Assists"],
     ["saves", "Saves"], ["shots", "Shots"], ["demos", "Demos"],
-    ["touches", "Ball touches"], ["carTouches", "Car touches"],
+    ["touches", "Ball touches"], ["carTouches", "Bumps"],
     ["postHits", "Post hits"], ["boostCollected", "Boost collected"],
-    ["aerialHits", "Aerial hits"], ["kickoffWins", "Kickoff wins"],
+    ["kickoffWins", "Kickoff wins"],
     ["ownGoals", "Own goals"]
 ];
 
@@ -47,7 +47,12 @@ function RangeField({ label, name, value, min, max, step, format, onChange }) {
 
 export default function SettingsApp() {
     const [settings, setSettings] = useState(null);
+    const [statsApiConfig, setStatsApiConfig] = useState(null);
+    const [packetSendRateInput, setPacketSendRateInput] = useState("10");
+    const [savingPacketRate, setSavingPacketRate] = useState(false);
+    const [packetRateMessage, setPacketRateMessage] = useState("");
     const [playerOptions, setPlayerOptions] = useState([]);
+    const [suggestedPlayerId, setSuggestedPlayerId] = useState(null);
     const [filePath, setFilePath] = useState("");
     const [historyFilePath, setHistoryFilePath] = useState("");
     const [historyError, setHistoryError] = useState("");
@@ -58,14 +63,15 @@ export default function SettingsApp() {
     const [updateStatus, setUpdateStatus] = useState({ state: "idle" });
     const [updateBusy, setUpdateBusy] = useState(false);
     const [closing, setClosing] = useState(false);
-    const [activeTab, setActiveTab] = useState("settings");
+    const [activeTab, setActiveTab] = useState("overlay");
 
     useEffect(() => {
         const api = window.rocketLeague;
         const unsubscribe = [
             api.onSettingsUpdated(setSettings),
-            api.onMatchHistoryUpdated(({ playerOptions: options, error }) => {
+            api.onMatchHistoryUpdated(({ playerOptions: options, suggestedPlayerId: suggestion, error }) => {
                 setPlayerOptions(options);
+                setSuggestedPlayerId(suggestion ?? null);
                 setHistoryError(error ?? "");
             }),
             api.onGamepadBindingResult((result) => {
@@ -84,6 +90,7 @@ export default function SettingsApp() {
             if (!mounted) return;
             setSettings(result.settings);
             setPlayerOptions(result.playerOptions);
+            setSuggestedPlayerId(result.suggestedPlayerId ?? null);
             setAppInfo(result.appInfo);
             setFilePath(`Saved to: ${result.filePath}`);
             setHistoryFilePath(`Match history file: ${result.historyFilePath}`);
@@ -92,12 +99,35 @@ export default function SettingsApp() {
             setMessage(`Could not load settings: ${error.message}`);
             setIsError(true);
         });
+        api.getStatsApiConfig().then((result) => {
+            if (!mounted) return;
+            setStatsApiConfig(result);
+            if (Number.isInteger(result.rate)) {
+                setPacketSendRateInput(String(result.rate));
+            }
+            if (result.error) {
+                setPacketRateMessage(`Could not load Rocket League API config: ${result.error}`);
+            }
+        }).catch((error) => {
+            if (!mounted) return;
+            setStatsApiConfig({ error: error.message });
+            setPacketRateMessage(`Could not load Rocket League API config: ${error.message}`);
+        });
         return () => {
             mounted = false;
             unsubscribe.forEach((dispose) => dispose?.());
             api.cancelGamepadBinding();
         };
     }, []);
+
+    useEffect(() => {
+        if (!settings || settings.trackedPlayerId ||
+            settings.trackedPlayerAutoSelectDisabled || !suggestedPlayerId ||
+            !playerOptions.some((player) => player.id === suggestedPlayerId)) {
+            return;
+        }
+        void save({ ...settings, trackedPlayerId: suggestedPlayerId });
+    }, [settings, suggestedPlayerId, playerOptions]);
 
     if (!settings) {
         return (
@@ -193,6 +223,32 @@ export default function SettingsApp() {
         }
     }
 
+    async function savePacketSendRate() {
+        const rate = Number(packetSendRateInput);
+        if (!Number.isInteger(rate) || rate < 1 || rate > 120) {
+            setPacketRateMessage("Enter a whole number from 1 to 120 updates per second.");
+            return;
+        }
+        setSavingPacketRate(true);
+        setPacketRateMessage("Saving packet send rate...");
+        try {
+            const result = await window.rocketLeague.setStatsApiPacketRate(rate);
+            if (!result.ok) {
+                setPacketRateMessage(`Could not save packet send rate: ${result.error}`);
+                return;
+            }
+            setStatsApiConfig(result);
+            setPacketSendRateInput(String(result.rate));
+            setPacketRateMessage(
+                `Saved to ${result.filePath}. Restart Rocket League for the change to take effect.`
+            );
+        } catch (error) {
+            setPacketRateMessage(`Could not save packet send rate: ${error.message}`);
+        } finally {
+            setSavingPacketRate(false);
+        }
+    }
+
     const updateMessage = {
         idle: appInfo.isPackaged
             ? "Check GitHub Releases for a newer version."
@@ -205,27 +261,43 @@ export default function SettingsApp() {
         "up-to-date": `You're up to date (version ${updateStatus.version}).`,
         error: `Update failed: ${updateStatus.message}`
     }[updateStatus.state] ?? "";
+    const tabDescriptions = {
+        overlay: "Customize what the in-game overlay shows and how it looks.",
+        controls: "Set keyboard shortcuts and controller buttons for quick access.",
+        history: "Choose your player and review local match-history options.",
+        imposter: "Host or join an Imposter game. These settings are separate from the overlay.",
+        app: "Check for updates or close RLOverlay."
+    };
+    const trackedPlayerName = playerOptions.find((player) =>
+        player.id === settings.trackedPlayerId
+    )?.name ?? "";
 
     return (
         <main>
             <h1>Overlay Settings</h1>
             <nav className="settings-tabs" aria-label="Settings sections">
-                <button
-                    type="button"
-                    className={activeTab === "settings" ? "active" : ""}
-                    onClick={() => setActiveTab("settings")}
-                >
-                    Overlay
-                </button>
-                <button
-                    type="button"
-                    className={activeTab === "imposter" ? "active" : ""}
-                    onClick={() => setActiveTab("imposter")}
-                >
-                    Imposter
-                </button>
+                {[
+                    ["overlay", "Overlay"],
+                    ["controls", "Controls"],
+                    ["history", "Match History"],
+                    ["imposter", "Imposter"],
+                    ["app", "App"]
+                ].map(([tab, label]) => (
+                    <button
+                        key={tab}
+                        type="button"
+                        className={activeTab === tab ? "active" : ""}
+                        aria-pressed={activeTab === tab}
+                        onClick={() => setActiveTab(tab)}
+                    >
+                        {label}
+                    </button>
+                ))}
             </nav>
-            <section className="settings-section" hidden={activeTab !== "settings"}>
+            <p className="settings-tab-description" aria-live="polite">
+                {tabDescriptions[activeTab]}
+            </p>
+            <section className="settings-section" hidden={activeTab !== "controls"}>
                 <h2>Keyboard shortcuts</h2>
                 <p className="help">Use Electron accelerator format, such as F8 or Ctrl+Shift+O.</p>
                 {keyboardOptions.map(([key, label]) => (
@@ -242,13 +314,16 @@ export default function SettingsApp() {
                 ))}
             </section>
 
-            <section className="settings-section" hidden={activeTab !== "settings"}>
+            <section className="settings-section" hidden={activeTab !== "controls"}>
                 <h2>Controller buttons</h2>
-                <p className="help">Hold the overlay button while pressing the history button to switch tabs.</p>
+                <p className="help">
+                    Hold the overlay button while pressing the history button to switch between the scoreboard and match history.
+                </p>
                 {[
                     ["overlayButton", "Hold to show overlay"],
-                    ["toggleConnectionButton", "Toggle API connection"],
-                    ["toggleHistoryButton", "Switch scoreboard / history"]
+                    ["toggleConnectionButton", "Toggle Rocket League connection"],
+                    ["toggleHistoryButton", "Switch scoreboard / history"],
+                    ["toggleSettingsButton", "Open or hide Settings"]
                 ].map(([key, label]) => (
                     <div className="controller-row" key={key}>
                         <label>{label}</label>
@@ -272,62 +347,50 @@ export default function SettingsApp() {
                 ))}
             </section>
 
-            <section className="settings-section" hidden={activeTab !== "settings"}>
-                <h2>Scoreboard stats</h2>
-                <div className="stat-options">
-                    {statOptions.map(([key, label]) => (
-                        <label className="stat-option" key={key}>
-                            {label}
-                            <input
-                                type="checkbox"
-                                checked={settings.statVisibility[key] !== false}
-                                onChange={(event) => updateStat(key, event.target.checked)}
-                            />
-                        </label>
-                    ))}
-                </div>
-            </section>
-
-            <section className="settings-section" hidden={activeTab !== "settings"}>
-                <h2>Match history</h2>
-                <Field label="Your player" htmlFor="tracked-player">
-                    <select
-                        id="tracked-player"
-                        value={settings.trackedPlayerId ?? ""}
-                        onChange={(event) => setSettings((current) => ({
-                            ...current,
-                            trackedPlayerId: event.target.value || null
-                        }))}
-                    >
-                        <option value="">
-                            {playerOptions.length ? "Choose a player" : "No players detected yet"}
-                        </option>
-                        {playerOptions.map((player) => (
-                            <option key={player.id} value={player.id}>
-                                {player.name} ({player.id})
-                            </option>
-                        ))}
-                    </select>
-                </Field>
+            <section className="settings-section" hidden={activeTab !== "controls"}>
+                <h2>Rocket League Stats API</h2>
                 <p className="help">
-                    Choose your player to calculate your record, goal differential, and stats against opponents.
-                    Player choices appear when the API detects them. Matches are saved locally when the API
-                    reports a match end or a new match starts.
+                    Choose how often Rocket League sends telemetry updates. The default is 10 updates per second.
+                </p>
+                <Field label="Packet send rate" htmlFor="packet-send-rate">
+                    <div className="packet-rate-control">
+                        <input
+                            id="packet-send-rate"
+                            type="number"
+                            min="1"
+                            max="120"
+                            step="1"
+                            value={packetSendRateInput}
+                            aria-label="Packet send rate in updates per second"
+                            onChange={(event) => {
+                                const { value } = event.target;
+                                setPacketSendRateInput(value);
+                            }}
+                        />
+                        <span className="help">updates/sec</span>
+                    </div>
+                </Field>
+                <p className="help file-path">
+                    {statsApiConfig?.filePath
+                        ? `Config file: ${statsApiConfig.filePath}`
+                        : statsApiConfig?.error
+                            ? `Config unavailable: ${statsApiConfig.error}`
+                            : "Loading Rocket League config..."}
                 </p>
                 <p className="help" role="status" aria-live="polite">
-                    {historyError
-                        ? `History error: ${historyError}`
-                        : `${playerOptions.length} player${playerOptions.length === 1 ? "" : "s"} available for tracking.`}
+                    {packetRateMessage}
                 </p>
-                <p className="help file-path">{historyFilePath}</p>
-                <p className="help">
-                    Tracker Network 2v2 peak rank and MMR are looked up once per player when they join.
-                    Disable the lookup option below to prevent Tracker Network pages from being opened.
-                </p>
+                <button
+                    type="button"
+                    disabled={savingPacketRate}
+                    onClick={savePacketSendRate}
+                >
+                    {savingPacketRate ? "Saving..." : "Save packet rate"}
+                </button>
             </section>
 
-            <section className="settings-section" hidden={activeTab !== "settings"}>
-                <h2>Appearance</h2>
+            <section className="settings-section" hidden={activeTab !== "overlay"}>
+                <h2>Appearance and display</h2>
                 <RangeField
                     label="Overlay size"
                     name="overlay-scale"
@@ -338,26 +401,28 @@ export default function SettingsApp() {
                     format={(value) => `${Math.round(value * 100)}%`}
                     onChange={(value) => setSettings((current) => ({ ...current, overlayScale: value }))}
                 />
-                <RangeField
-                    label="Horizontal position"
-                    name="overlay-position-x"
-                    value={settings.positionX}
-                    min="-500"
-                    max="500"
-                    step="10"
-                    format={(value) => `${value} px`}
-                    onChange={(value) => setSettings((current) => ({ ...current, positionX: value }))}
-                />
-                <RangeField
-                    label="Vertical offset"
-                    name="overlay-position-y"
-                    value={settings.positionYOffset}
-                    min="-500"
-                    max="500"
-                    step="10"
-                    format={(value) => `${value} px`}
-                    onChange={(value) => setSettings((current) => ({ ...current, positionYOffset: value }))}
-                />
+                <div className="settings-field-grid">
+                    <RangeField
+                        label="Horizontal position"
+                        name="overlay-position-x"
+                        value={settings.positionX}
+                        min="-500"
+                        max="500"
+                        step="10"
+                        format={(value) => `${value} px`}
+                        onChange={(value) => setSettings((current) => ({ ...current, positionX: value }))}
+                    />
+                    <RangeField
+                        label="Vertical position"
+                        name="overlay-position-y"
+                        value={settings.positionYOffset}
+                        min="-500"
+                        max="500"
+                        step="10"
+                        format={(value) => `${value} px`}
+                        onChange={(value) => setSettings((current) => ({ ...current, positionYOffset: value }))}
+                    />
+                </div>
                 <p className="help">
                     Position is measured from screen center. Positive horizontal values move right; positive vertical values move down.
                 </p>
@@ -394,9 +459,73 @@ export default function SettingsApp() {
                     </select>
                 </Field>
                 <p className="help">
-                    Possession percentages are based on recorded ball touches. Three-zone mode splits the field into top, middle, and bottom thirds.
+                    The three-zone view splits the field into thirds and includes each team’s possession and touch shares.
                 </p>
-                <Field label="Look up peak ranks on Tracker Network" htmlFor="rank-lookup-enabled">
+            </section>
+
+            <section className="settings-section" hidden={activeTab !== "overlay"}>
+                <h2>Scoreboard stats</h2>
+                <p className="help">Choose which player stats appear on the scoreboard.</p>
+                <div className="stat-options">
+                    {statOptions.map(([key, label]) => (
+                        <label className="stat-option" key={key}>
+                            {label}
+                            <input
+                                type="checkbox"
+                                checked={settings.statVisibility[key] !== false}
+                                onChange={(event) => updateStat(key, event.target.checked)}
+                            />
+                        </label>
+                    ))}
+                </div>
+            </section>
+
+            <section className="settings-section" hidden={activeTab !== "history"}>
+                <h2>Your player</h2>
+                <Field label="Player to track" htmlFor="tracked-player">
+                    <select
+                        id="tracked-player"
+                        value={settings.trackedPlayerId ?? ""}
+                        onChange={(event) => setSettings((current) => ({
+                            ...current,
+                            trackedPlayerId: event.target.value || null,
+                            trackedPlayerAutoSelectDisabled: true
+                        }))}
+                    >
+                        <option value="">
+                            {playerOptions.length ? "Choose a player" : "No players detected yet"}
+                        </option>
+                        {playerOptions.map((player) => (
+                            <option key={player.id} value={player.id}>
+                                {player.name} ({player.id})
+                            </option>
+                        ))}
+                    </select>
+                </Field>
+                <p className="help">
+                    Choose your player to calculate personal stats and results against opponents. Players appear after the Rocket League API detects them; matches are saved when a match ends or a new one starts.
+                </p>
+                {settings.trackedPlayerId === suggestedPlayerId &&
+                    !settings.trackedPlayerAutoSelectDisabled && (
+                        <p className="help" role="status">
+                            Your player was auto-selected because they appeared in every saved match
+                            (at least three matches) and were the only player to do so.
+                        </p>
+                    )}
+                <p className="help" role="status" aria-live="polite">
+                    {historyError
+                        ? `History error: ${historyError}`
+                        : `${playerOptions.length} player${playerOptions.length === 1 ? "" : "s"} available for tracking.`}
+                </p>
+                <p className="help file-path">{historyFilePath}</p>
+            </section>
+
+            <section className="settings-section" hidden={activeTab !== "history"}>
+                <h2>Optional rank lookup</h2>
+                <p className="help">
+                    Look up peak rank and MMR on Tracker Network once per player when they join.
+                </p>
+                <Field label="Enable Tracker Network lookups" htmlFor="rank-lookup-enabled">
                     <input
                         id="rank-lookup-enabled"
                         type="checkbox"
@@ -408,8 +537,8 @@ export default function SettingsApp() {
                 </Field>
             </section>
 
-            <section className="settings-section" hidden={activeTab !== "settings"}>
-                <h2>App updates</h2>
+            <section className="settings-section" hidden={activeTab !== "app"}>
+                <h2>Updates</h2>
                 <p className="help">Installed version: {appInfo.version || "Unknown"}</p>
                 <p className={`help${updateStatus.state === "error" ? " settings-message error" : ""}`}
                     role="status" aria-live="polite">
@@ -430,15 +559,18 @@ export default function SettingsApp() {
                     )}
                 </div>
             </section>
-
-            <div className="settings-footer" hidden={activeTab !== "settings"}>
+            <section className="settings-section" hidden={activeTab !== "app"}>
+                <h2>Close RLOverlay</h2>
+                <p className="help">Close the application and its overlay windows.</p>
+                <button type="button" className="close-app-button" disabled={closing} onClick={closeApp}>
+                    {closing ? "Closing..." : "Close app"}
+                </button>
+            </section>
+            <div className="settings-footer" hidden={activeTab === "imposter"}>
                 <span className="file-path">{filePath}</span>
                 <div className="settings-actions">
                     <button type="button" disabled={saving} onClick={() => save()}>
-                        Save settings
-                    </button>
-                    <button type="button" className="close-app-button" disabled={closing} onClick={closeApp}>
-                        {closing ? "Closing..." : "Close app"}
+                        Save changes
                     </button>
                 </div>
             </div>
@@ -446,11 +578,16 @@ export default function SettingsApp() {
                 className={`settings-message${isError ? " error" : ""}`}
                 role="status"
                 aria-live="polite"
-                hidden={activeTab !== "settings"}
+                hidden={activeTab === "imposter"}
             >
                 {message}
             </div>
-            {activeTab === "imposter" && <PartyApp />}
+            <div
+                className="settings-party-surface party-page"
+                hidden={activeTab !== "imposter"}
+            >
+                <SupabasePartyApp initialName={trackedPlayerName} />
+            </div>
         </main>
     );
 }

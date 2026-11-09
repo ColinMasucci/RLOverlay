@@ -83,7 +83,7 @@ function GameSequence({ games }) {
 function OpponentTable({ opponents }) {
     return (
         <section>
-            <h2>Head-to-head · last 10 games</h2>
+            <h2>Head-to-head · last 15 opponents</h2>
             <table className="head-to-head-table">
                 <thead>
                     <tr>
@@ -151,7 +151,6 @@ export default function MatchHistory({ history, settingsShortcut }) {
         ["Shots", stats.shots],
         ["Demos", stats.demos],
         ["Ball touches", stats.touches],
-        ["Aerial hits", stats.aerialHits],
         ["Boost collected", stats.boostCollected],
         ["Own goals", stats.ownGoals]
     ];

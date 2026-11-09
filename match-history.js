@@ -61,7 +61,9 @@ function normalizePlayer(player) {
     const name = player.name ?? player.Name;
     const team = player.team ?? player.TeamNum;
     const id = getPlayerId(player);
-    if (!id || typeof name !== "string" || (team !== 0 && team !== 1)) {
+    const isSpectator = player.isSpectator ?? player.IsSpectator ?? player.bIsSpectator;
+    if (!id || typeof name !== "string" || (team !== 0 && team !== 1) ||
+        isSpectator === true) {
         return null;
     }
 
@@ -120,6 +122,36 @@ function listPlayerOptions(matches, currentPlayers = []) {
     );
 }
 
+function suggestTrackedPlayerId(matches, minimumMatches = 3) {
+    if (!Array.isArray(matches) || matches.length < minimumMatches) {
+        return null;
+    }
+
+    const appearances = new Map();
+    for (const match of matches) {
+        const playersInMatch = new Set();
+        for (const player of match.players ?? []) {
+            const id = getPlayerId(player);
+            if (!id || isBotPlayer(player)) {
+                continue;
+            }
+            playersInMatch.add(id);
+        }
+        for (const id of playersInMatch) {
+            appearances.set(id, (appearances.get(id) ?? 0) + 1);
+        }
+    }
+
+    const highestAppearanceCount = Math.max(0, ...appearances.values());
+    const leaders = [...appearances.entries()].filter(([, count]) =>
+        count === highestAppearanceCount
+    );
+    if (leaders.length !== 1 || highestAppearanceCount !== matches.length) {
+        return null;
+    }
+    return leaders[0][0];
+}
+
 function createTotals() {
     return Object.fromEntries(statFields.map((field) => [field, 0]));
 }
@@ -145,6 +177,29 @@ function aggregateMatchScope(matches, trackedPlayerId, currentOpponentIds = new 
     }
 
     const opponentTotals = new Map();
+    for (const player of currentOpponentIds.players ?? []) {
+        const normalized = normalizePlayer(player);
+        if (!normalized || normalized.id === trackedPlayerId) {
+            continue;
+        }
+        opponentTotals.set(normalized.id, {
+            id: normalized.id,
+            name: normalized.name,
+            isCurrentMatch: true,
+            games: 0,
+            wins: 0,
+            losses: 0,
+            draws: 0,
+            goalsFor: 0,
+            goalsAgainst: 0,
+            kickoffWins: 0,
+            kickoffLosses: 0,
+            kickoffDraws: 0,
+            kickoffAttempts: 0,
+            lastPlayedAt: null
+        });
+    }
+    const currentOpponentIdSet = currentOpponentIds.ids ?? currentOpponentIds;
     for (const match of matches) {
         const tracked = match.players.find((player) => player.id === trackedPlayerId);
         if (!tracked || isBotPlayer(tracked)) {
@@ -182,7 +237,7 @@ function aggregateMatchScope(matches, trackedPlayerId, currentOpponentIds = new 
             const record = opponentTotals.get(opponent.id) ?? {
                 id: opponent.id,
                 name: opponent.name,
-                isCurrentMatch: currentOpponentIds.has(opponent.id),
+                isCurrentMatch: currentOpponentIdSet.has(opponent.id),
                 games: 0,
                 wins: 0,
                 losses: 0,
@@ -192,10 +247,12 @@ function aggregateMatchScope(matches, trackedPlayerId, currentOpponentIds = new 
                 kickoffWins: 0,
                 kickoffLosses: 0,
                 kickoffDraws: 0,
-                kickoffAttempts: 0
+                kickoffAttempts: 0,
+                lastPlayedAt: null
             };
             record.name = opponent.name;
-            record.isCurrentMatch = currentOpponentIds.has(opponent.id);
+            record.isCurrentMatch = currentOpponentIdSet.has(opponent.id);
+            record.lastPlayedAt ??= match.finishedAt;
             record.games += 1;
             record[outcome] += 1;
             record.goalsFor += goalsFor;
@@ -244,9 +301,10 @@ function aggregateMatchScope(matches, trackedPlayerId, currentOpponentIds = new 
     }
     aggregate.opponents = [...opponentTotals.values()].sort((left, right) =>
         Number(right.isCurrentMatch) - Number(left.isCurrentMatch) ||
+        (right.lastPlayedAt ?? "").localeCompare(left.lastPlayedAt ?? "") ||
         right.games - left.games ||
         left.name.localeCompare(right.name)
-    );
+    ).slice(0, 15).map(({ lastPlayedAt, ...opponent }) => opponent);
     return aggregate;
 }
 
@@ -254,16 +312,19 @@ function aggregateMatches(matches, trackedPlayerId, currentPlayers = []) {
     const trackedPlayer = matches
         .flatMap((match) => match.players)
         .find((player) => player.id === trackedPlayerId && !isBotPlayer(player));
+    const currentTrackedPlayer = (currentPlayers ?? []).find((player) =>
+        getPlayerId(player) === trackedPlayerId && !isBotPlayer(player)
+    );
+    const trackedTeam = currentTrackedPlayer
+        ? normalizePlayer(currentTrackedPlayer)?.team
+        : trackedPlayer?.team;
+    const currentOpponents = (currentPlayers ?? []).filter((player) => {
+        const normalized = normalizePlayer(player);
+        return normalized && !isBotPlayer(player) && player.active !== false &&
+            normalized.id !== trackedPlayerId && normalized.team !== trackedTeam;
+    });
     const currentOpponentIds = new Set(
-        (currentPlayers ?? [])
-            .filter((player) => {
-                const normalized = normalizePlayer(player);
-                return normalized && !isBotPlayer(player) &&
-                    player.active !== false &&
-                    (!trackedPlayer || normalized.team !== trackedPlayer.team);
-            })
-            .map((player) => getPlayerId(player))
-            .filter(Boolean)
+        currentOpponents.map((player) => getPlayerId(player)).filter(Boolean)
     );
     const trackedMatches = matches
         .filter((match) => match.players.some((player) =>
@@ -274,10 +335,12 @@ function aggregateMatches(matches, trackedPlayerId, currentPlayers = []) {
             right.id.localeCompare(left.id)
         );
     const mostRecent20 = trackedMatches.slice(0, 20);
-    const mostRecent10 = trackedMatches.slice(0, 10);
     const overall = aggregateMatchScope(trackedMatches, trackedPlayerId);
     const display = aggregateMatchScope(mostRecent20, trackedPlayerId);
-    const headToHead = aggregateMatchScope(mostRecent10, trackedPlayerId, currentOpponentIds);
+    const headToHead = aggregateMatchScope(trackedMatches, trackedPlayerId, {
+        ids: currentOpponentIds,
+        players: currentOpponents
+    });
 
     return {
         ...overall,
@@ -293,5 +356,6 @@ module.exports = {
     getPlayerId,
     isBotPlayer,
     listPlayerOptions,
+    suggestTrackedPlayerId,
     statFields
 };

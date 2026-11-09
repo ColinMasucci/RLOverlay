@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { getZoneTouchShares } from "./heatmap-data.mjs";
 
 function getPossession(samples) {
     const counts = [0, 0];
@@ -239,6 +240,7 @@ function drawHeatmap(canvas, samples, mode, userTeam) {
 export default function Heatmap({ samples, mode, userTeam = 0 }) {
     const canvasRef = useRef(null);
     const possession = getPossession(samples);
+    const touchShares = getZoneTouchShares(samples, userTeam);
     useEffect(() => {
         if (canvasRef.current) drawHeatmap(canvasRef.current, samples, mode, userTeam);
     }, [samples, mode, userTeam]);
@@ -262,13 +264,28 @@ export default function Heatmap({ samples, mode, userTeam = 0 }) {
                     {Math.round(possession?.[opponentTeam] ?? 0)}%
                 </span>
             </div>
-            <canvas
-                ref={canvasRef}
-                className="heatmap-canvas"
-                width="640"
-                height="800"
-                aria-label="Top-down map showing ball locations or three-zone team possession"
-            />
+            <div className={`heatmap-map-layout ${mode === "zones" ? "with-touch-shares" : ""}`}>
+                <canvas
+                    ref={canvasRef}
+                    className="heatmap-canvas"
+                    width="640"
+                    height="800"
+                    aria-label="Top-down map showing ball locations or three-zone team possession"
+                />
+                {mode === "zones" && (
+                    <section className="touch-share-panel" aria-label="Share of ball touches by field third">
+                        <h3>Touches by third</h3>
+                        {["Attacking", "Middle", "Defensive"].map((label, index) => (
+                            <div className="touch-share-row" key={label}>
+                                <span>{label}</span>
+                                <strong>{touchShares[index] === null
+                                    ? "—"
+                                    : `${Math.round(touchShares[index])}%`}</strong>
+                            </div>
+                        ))}
+                    </section>
+                )}
+            </div>
         </aside>
     );
 }

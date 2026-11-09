@@ -74,10 +74,47 @@ function getTeamGoalTotals(players) {
     );
 }
 
+function getGroundState(player) {
+    const value = player?.bOnGround ??
+        player?.OnGround ??
+        player?.onGround ??
+        player?.Car?.bOnGround ??
+        player?.Car?.OnGround;
+    if (typeof value === "boolean") {
+        return value;
+    }
+    if (value === 0 || value === 1) {
+        return value === 1;
+    }
+    return undefined;
+}
+
+function isMatchParticipant(player) {
+    const isSpectator = player?.bIsSpectator ??
+        player?.IsSpectator ??
+        player?.isSpectator;
+    return (player?.TeamNum === 0 || player?.TeamNum === 1) &&
+        typeof player?.Name === "string" &&
+        player.Name.trim().length > 0 &&
+        isSpectator !== true;
+}
+
+function recordAerialHit(hitCounts, motionByKey, playerKey, player) {
+    const onGround = motionByKey.get(playerKey)?.onGround ?? getGroundState(player);
+    if (onGround !== false) {
+        return false;
+    }
+    hitCounts.set(playerKey, (hitCounts.get(playerKey) ?? 0) + 1);
+    return true;
+}
+
 module.exports = {
     KICKOFF_OPPONENT_HALF_BUFFER,
     createKickoffState,
+    getGroundState,
     getTeamGoalTotals,
+    isMatchParticipant,
+    recordAerialHit,
     registerKickoffBallHit,
     resolveKickoffGoal,
     startKickoff
