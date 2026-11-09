@@ -1,6 +1,6 @@
 {
   "name": "rloverlay",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Rocket League scoreboard and match-history overlay",
   "main": "main.js",
   "scripts": {

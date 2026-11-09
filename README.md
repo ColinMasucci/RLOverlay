@@ -180,10 +180,11 @@ The unsigned NSIS installer is written to
 `release/RLOverlay-Setup-<version>.exe`.
 
 To publish a release, update the version in `package.json`, push the change, then
-create and push a matching version tag (for example, `v1.0.1`). The GitHub Actions
-workflow builds and publishes the installer as a GitHub Release. GitHub Actions
-must be enabled for the repository. For the first release of a version, push the
-matching tag after the repository is on GitHub.
+create and push a matching version tag (for this release, `v1.1.0`). The GitHub
+Actions workflow builds and publishes the installer as a GitHub Release when a
+matching `v*` tag is pushed. Ensure GitHub Actions is enabled and the Supabase
+repository Actions variables described above are configured before pushing the
+tag.
 
 ### Local data and architecture
 
