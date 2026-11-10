@@ -102,7 +102,7 @@ round, then vote on who they think the imposter is. The host can configure the
 round settings, including the game mode and optional anonymous chat. The game
 also supports a speed-target mode with configurable units and target ranges.
 
-Open the deployed RLOverlay website and choose **Host** or **Join** to play in a
+Open the deployed RLOverlay website: (https://rl-overlay-sand.vercel.app/) and choose **Host** or **Join** to play in a
 browser. The desktop app's **Imposter** tab uses the same Supabase lobbies and
 lets you host or join with a lobby code. During a round, your personal role and
 task appear in a compact card at the top-left of your screen. Players do not need
